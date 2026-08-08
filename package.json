@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "bun run --hot src/main.ts",
     "start": "bun run src/main.ts",
-    "test": "bun test",
+    "test": "bun test --path-ignore-patterns \"**/presentation/**\"",
+    "test:api": "bun test presentation",
     "check:types": "tsc --noEmit",
     "check:lint": "oxlint -c .oxlintrc.jsonc",
     "check:deps": "depcruise src --config .dependency-cruiser.mjs --output-type err-long",

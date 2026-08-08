@@ -33,7 +33,7 @@ src/
 │  │                    #   派生型だけのファイルを置く（振る舞いを持つものは直下）
 │  └─ infrastructure/   # 実装（Layer）。横断ポートの本番実装と、DB の実行時コード
 │     └─ db/           #   接続の Layer と error/（例外を読む・分類する・翻訳する）
-├─ __tests__/           # テストは対象と同階層の __tests__ に置く（コロケーション）
+├─ __mocks__/           # テスト用の偽の実装と固定値（本番コードからは参照しない）
 └─ generated/           # orval が OpenAPI から生成（gitignore, prepare で再生成）
 docs/                   # 設計と学びの記録
 ```
@@ -606,6 +606,84 @@ changeUserPassword  → updatePassword   （hashedPassword / updatedAt を書く
 なお `updatePassword` の `E` に `MailAddressAlreadyExistsError` が無いのは、
 あれがメールアドレスを書かないため。触らない列の制約違反は起こりえない。
 書き込みポートを状態遷移ごとに分けた効果がここにも出ている。
+
+---
+
+## テストは 2 種類に分け、対象の隣に置く
+
+**単体テスト**（モジュール単位）と **API テスト**（エンドポイント単位）で分ける。
+どちらも対象と同階層の `__tests__/` に置く。
+
+```text
+src/contexts/auth/domain/model/__tests__/refresh-token.test.ts       単体
+src/contexts/user/presentation/__tests__/get-user-controller.test.ts API
+src/shared/presentation/__tests__/verify-bearer.test.ts              API（横断）
+src/__mocks__/                                                       テストの資材
+```
+
+```jsonc
+"test":     "bun test --path-ignore-patterns \"**/presentation/**\"",  // 単体
+"test:api": "bun test presentation",                                    // API
+```
+
+### controller の単体テストは書かない
+
+controller は「検証済みの入力を組み立て、ユースケースを呼ぶ」だけの数行しかない。
+偽の command を注入して「呼ばれたこと」を確かめても、守れるものが無い。
+
+代わりに **エンドポイント越しに叩く**。`createApp` にテスト用のランタイムを渡すと、
+偽物になるのは**ポートの実装だけ**で、その内側は全部本物が動く。
+
+```text
+routes（契約検証）→ controller → command → domain → ポート
+                                                      ↑ ここだけ偽物
+```
+
+だから 1 ケースで `handleWithEffect` の契約検証・`decodeInput` の値オブジェクト変換・
+ドメインの業務ルール・`handleErrorResponse` のエラー翻訳・応答スキーマの検証まで
+まとめて通る。**ファイル名は controller に合わせるが、試しているのはエンドポイント**
+であって controller 単体ではない。
+
+この形の強さは実証済みで、プレゼンテーション層を 13 段階作り替えても、
+`Database` を Layer 化しても、`shared/db` を丸ごと移動しても、
+HTTP 境界のテストは 1 行も変えずに通り続けた。**契約は動かないので縫い目も動かない。**
+
+### 横断的な振る舞いは `shared/presentation/__tests__/` へ
+
+「`Authorization` が無ければ 401（認証を要求する 4 本すべて）」のように、
+**複数のエンドポイントにまたがるもの**は controller 単位のファイルに置けない。
+`handleWithEffect` が共通で担っている振る舞い（相関 ID・defect の受け皿・契約検証）も同じ。
+
+### 実行の分け方は「除外」で書く
+
+`test` は対象を列挙せず、**presentation を除外する**形にしている。
+列挙する形にすると、新しい層や置き場を足したときに書き足し忘れる。
+しかも **忘れても緑になる**ので気付けない（テストが実行されていないのに成功に見える）。
+除外形なら、忘れたときに「余計に実行される」方向に倒れる。
+
+### テストは境界検査の対象外
+
+`.dependency-cruiser.mjs` で `__tests__` と `__mocks__` を除外している。
+ルールが守っているのは**本番コードの構造**で、テストは元からその外側にいる。
+
+とくに API テストは `createApp` を組み立てるため、合成ルート（`main.ts` /
+`app-runtime.ts`）と同じく全アダプタへ経路が繋がる。実際 `presentation/__tests__/` へ
+移した瞬間に `no-indirect-path-to-impl` が発火した（あのディレクトリは `PORT_SIDE` に
+含まれるため）。**コロケーションを選ぶ以上この除外は必須**で、
+`src/__tests__/` に置いていた頃は `src` 直下 = `PORT_SIDE` の外だったので露見しなかった。
+
+除外しすぎていないこと（本番コードでは今もルールが効くこと）は、
+わざと違反するファイルを作って確認している。
+
+### `__mocks__` に入れるもの
+
+偽の実装（`makeRuntime` と偽 Layer）と、それが使う固定値だけ。
+**リクエストのヘルパーは置かない** — 分割後はそれぞれ 1 つのテストファイルからしか
+使われないので、共有する理由が無い。
+
+`__tests__` にテスト以外を置かないのと同じ理由で、`__mocks__` にもモック以外を置かない。
+フィクスチャを別に切る（`__fixtures__`）のは、**モックと無関係に育ってきたとき**でよい。
+いまは共有しているのが 120 行ほどなので、フォルダを分ける量ではない。
 
 ---
 

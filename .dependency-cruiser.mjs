@@ -222,6 +222,22 @@ export default {
 
     doNotFollow: { path: "node_modules" },
 
+    // テストファイルは境界検査の対象にしない。
+    //
+    // ここのルールが守っているのは**本番コードの構造**で、テストは元からその外側にいる。
+    // とくに API テストは createApp を組み立てるため、合成ルート (main.ts /
+    // app-runtime.ts) と同じく全アダプタへ経路が繋がる。
+    // 実際 presentation/__tests__/ に置いた瞬間 no-indirect-path-to-impl が発火した
+    // (あのディレクトリは PORT_SIDE に含まれるため)。
+    //
+    // 逆に言えば、**テストを層の内側へコロケーションする以上この除外は必須**。
+    // src/__tests__/ に置いていた頃は src 直下 = PORT_SIDE の外だったので問題にならず、
+    // 移した初日に露見した。
+    //
+    // 除外しすぎていないこと (本番コードでは今もルールが効くこと) は、
+    // わざと違反するファイルを作って確認している。
+    exclude: { path: "(__tests__|__mocks__)/" },
+
     // 実行のたびに "missing-typescript-transpiler" が警告として出るが、
     // これは承知のうえで受け入れている。TypeScript 7 が dependency-cruiser の
     // 対応範囲 (>=2 <7) の外にあることを知らせているだけで、解析は swc が完遂しており
