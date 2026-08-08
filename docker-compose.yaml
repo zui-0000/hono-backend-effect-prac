@@ -2,11 +2,11 @@
 services:
   db:
     image: postgres:18 #19 はまだ beta のため 18 を採用。
-    container_name: hono-cqrs-prac-db
+    container_name: hono-effect-prac-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: hono_cqrs_prac
+      POSTGRES_DB: hono_effect_prac
       # データ本体はサブディレクトリに置く (マウント直下の lost+found 等との衝突回避の定石)。
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
@@ -14,7 +14,7 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d hono_cqrs_prac"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hono_effect_prac"]
       interval: 5s
       timeout: 5s
       retries: 10

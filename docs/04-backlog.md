@@ -58,7 +58,7 @@
 1. `docker compose up -d` → `pnpm db:migrate` → `pnpm start`
 2. **同一メールアドレスで 10 リクエストを同時に** `POST /users`
 3. 応答が `201` × 1 / `409` × 9 / `500` × 0 になること
-4. `docker logs hono-cqrs-prac-db | grep "duplicate key value violates unique constraint"` が
+4. `docker logs hono-effect-prac-db | grep "duplicate key value violates unique constraint"` が
    **9 件**で、制約名が `t_user_mail_address_unique` であること
 
 4 が本命。ここが 0 件なら事前チェックが弾いただけで、この経路は検証できていない。

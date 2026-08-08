@@ -1,4 +1,4 @@
-# hono-backend-cqrs-prac
+# hono-backend-effect-prac
 
 Hono + CQRS + DDD を学習するためのバックエンド（Bun ランタイム）。
 

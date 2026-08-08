@@ -1,5 +1,5 @@
 {
-  "name": "hono-backend-cqrs-prac",
+  "name": "hono-backend-effect-prac",
   "private": true,
   "type": "module",
   "scripts": {

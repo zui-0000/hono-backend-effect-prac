@@ -8,8 +8,8 @@ import "./shared/index.tsp";
 using TypeSpec.Http;
 using TypeSpec.OpenAPI;
 
-/** hono-cqrs-prac のバックエンド API (users / auth) */
-@service(#{ title: "hono-cqrs-prac backend API" })
+/** hono-backend-effect-prac のバックエンド API (users / auth) */
+@service(#{ title: "hono-backend-effect-prac backend API" })
 @info(#{ version: "0.1.0" })
 namespace BackendApi {
   @tag("Users")
