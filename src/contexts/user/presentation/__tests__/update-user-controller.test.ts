@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option } from "effect";
 
-import { createApp } from "~/app";
-import type { AppRuntime } from "~/app-runtime";
 import { makeRuntime } from "~/__mocks__/app-runtime";
 import {
   REQUEST_ID,
@@ -12,7 +10,11 @@ import {
   headers,
   makeUser,
 } from "~/__mocks__/data";
+import { createApp } from "~/app";
+import type { AppRuntime } from "~/app-runtime";
 import { User } from "~/contexts/user/domain/model/user";
+import type { UserName } from "~/contexts/user/domain/model/value-objects/user-name";
+import type { MailAddress } from "~/shared/domain/model/value-objects/mail-address";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { HttpHeader } from "~/shared/presentation/constants/http-header";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
@@ -26,7 +28,6 @@ const putUser = async (
     headers,
     body: JSON.stringify(body),
   });
-
 
 describe("PUT /users/:id", () => {
   const updateBody = {

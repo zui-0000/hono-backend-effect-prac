@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option } from "effect";
 
-import { createApp } from "~/app";
-import type { AppRuntime } from "~/app-runtime";
 import { makeRuntime } from "~/__mocks__/app-runtime";
 import {
   FAKE_HASH,
@@ -13,11 +11,14 @@ import {
   headers,
   validBody,
 } from "~/__mocks__/data";
+import { createApp } from "~/app";
+import type { AppRuntime } from "~/app-runtime";
 import { User } from "~/contexts/user/domain/model/user";
+import type { UserHashedPassword } from "~/contexts/user/domain/model/value-objects/user-hashed-password";
+import type { UserId } from "~/contexts/user/domain/model/value-objects/user-id";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { HttpHeader } from "~/shared/presentation/constants/http-header";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
-import { makeUser } from "~/__mocks__/data";
 const postUsers = async (
   runtime: AppRuntime,
   body: Record<string, unknown>,
@@ -27,7 +28,6 @@ const postUsers = async (
     headers,
     body: JSON.stringify(body),
   });
-
 
 describe("POST /users", () => {
   test("正常系: 201 を返し、ハッシュ済みの User を永続化する", async () => {

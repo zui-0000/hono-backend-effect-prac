@@ -1,34 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Option, Schema } from "effect";
+import { Effect } from "effect";
 
+import { makeRuntime } from "~/__mocks__/app-runtime";
+import { FIXED_UUID, REQUEST_ID, headers, validBody } from "~/__mocks__/data";
 import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
-import { makeRuntime } from "~/__mocks__/app-runtime";
-import {
-  FIXED_UUID,
-  REQUEST_ID,
-  headers,
-  validBody,
-} from "~/__mocks__/data";
 import { UnauthorizedError } from "~/shared/errors/unauthorized-error";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { HttpHeader } from "~/shared/presentation/constants/http-header";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
 const getUser = async (runtime: AppRuntime, id: string): Promise<Response> =>
   await createApp(runtime).request(`/users/${id}`, { headers });
-
-const putUser = async (
-  runtime: AppRuntime,
-  id: string,
-  body: Record<string, unknown>,
-): Promise<Response> =>
-  await createApp(runtime).request(`/users/${id}`, {
-    method: "PUT",
-    headers,
-    body: JSON.stringify(body),
-  });
-
 
 describe("認証 (Bearer)", () => {
   /**

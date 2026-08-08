@@ -1,33 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option } from "effect";
 
+import { makeRuntime } from "~/__mocks__/app-runtime";
+import { REQUEST_ID, FIXED_UUID, headers } from "~/__mocks__/data";
 import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
-import { makeRuntime } from "~/__mocks__/app-runtime";
-import {
-  REQUEST_ID,
-  FIXED_UUID,
-  headers,
-} from "~/__mocks__/data";
 import type { GetUserQueryOutput } from "~/contexts/user/application/get-user-query-service";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { HttpHeader } from "~/shared/presentation/constants/http-header";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
 const getUser = async (runtime: AppRuntime, id: string): Promise<Response> =>
   await createApp(runtime).request(`/users/${id}`, { headers });
-
-const putUser = async (
-  runtime: AppRuntime,
-  id: string,
-  body: Record<string, unknown>,
-): Promise<Response> =>
-  await createApp(runtime).request(`/users/${id}`, {
-    method: "PUT",
-    headers,
-    body: JSON.stringify(body),
-  });
-
 
 describe("GET /users/:id", () => {
   test("正常系: 200 を返し、契約どおり name / mailAddress のみを含む", async () => {

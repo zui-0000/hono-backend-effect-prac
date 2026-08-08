@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option } from "effect";
 
-import { createApp } from "~/app";
-import type { AppRuntime } from "~/app-runtime";
 import { makeRuntime } from "~/__mocks__/app-runtime";
 import {
   EXISTING_HASH,
@@ -12,7 +10,10 @@ import {
   headers,
   makeUser,
 } from "~/__mocks__/data";
+import { createApp } from "~/app";
+import type { AppRuntime } from "~/app-runtime";
 import { User } from "~/contexts/user/domain/model/user";
+import type { UserHashedPassword } from "~/contexts/user/domain/model/value-objects/user-hashed-password";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
 const putPassword = async (
@@ -25,7 +26,6 @@ const putPassword = async (
     headers,
     body: JSON.stringify(body),
   });
-
 
 describe("PUT /users/:id/password", () => {
   const passwordBody = {
