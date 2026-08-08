@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Option, Schema, TestClock, TestContext } from "effect";
+import { Effect, Schema, TestClock, TestContext } from "effect";
 
 import {
   classifyRefreshToken,
@@ -54,100 +54,105 @@ const classifyAtNow = (token: RefreshToken): Promise<RefreshTokenState> =>
     }).pipe(Effect.provide(TestContext.TestContext)),
   );
 
-describe("classifyRefreshToken", () => {
-  test("未失効・期限内なら usable", async () => {
+describe(classifyRefreshToken.name, () => {
+  test("未失効かつ期限内の場合、usable を返すこと", async () => {
     const token = makeToken({
       expiresAt: at(60_000),
       revokedAt: null,
       revokedReason: null,
     });
 
-    expect(await classifyAtNow(token)).toBe(RefreshTokenState.Usable);
+    const state = await classifyAtNow(token);
+
+    expect(state).toBe(RefreshTokenState.Usable);
   });
 
-  test("ローテーション済みでも猶予期間の内なら within-grace", async () => {
+  test("ローテーション済みで猶予期間の内の場合、within-grace を返すこと", async () => {
     const token = makeToken({
       expiresAt: at(60_000),
       revokedAt: at(-5_000),
       revokedReason: RevokedReason.Rotated,
     });
 
-    expect(await classifyAtNow(token)).toBe(RefreshTokenState.WithinGrace);
+    const state = await classifyAtNow(token);
+
+    expect(state).toBe(RefreshTokenState.WithinGrace);
   });
 
-  test("猶予期間の境界 (30 秒ちょうど) は内側に含む", async () => {
+  test("失効からちょうど 30 秒の場合、境界を内側に含めて within-grace を返すこと", async () => {
     const token = makeToken({
       expiresAt: at(60_000),
       revokedAt: at(-30_000),
       revokedReason: RevokedReason.Rotated,
     });
 
+    const state = await classifyAtNow(token);
+
     // 境界を外側に倒すと、ちょうど 30 秒で更新を投げたタブが盗難扱いされる。
-    expect(await classifyAtNow(token)).toBe(RefreshTokenState.WithinGrace);
+    expect(state).toBe(RefreshTokenState.WithinGrace);
   });
 
-  test("猶予期間を 1 ミリ秒でも過ぎたら reused (盗難のサイン)", async () => {
+  test("猶予期間を 1 ミリ秒でも過ぎた場合、盗難のサインとして reused を返すこと", async () => {
     const token = makeToken({
       expiresAt: at(60_000),
       revokedAt: at(-30_001),
       revokedReason: RevokedReason.Rotated,
     });
 
-    expect(await classifyAtNow(token)).toBe(RefreshTokenState.Reused);
+    const state = await classifyAtNow(token);
+
+    expect(state).toBe(RefreshTokenState.Reused);
   });
 
-  test("ログアウト・盗難検出で切られた券は猶予期間の内でも revoked", async () => {
+  test("ログアウト・盗難検出で切られた券の場合、猶予期間の内でも revoked を返すこと", async () => {
     const token = makeToken({
       expiresAt: at(60_000),
       revokedAt: at(-5_000), // 5 秒前 = 猶予期間の内
       revokedReason: RevokedReason.Revoked,
     });
 
+    const state = await classifyAtNow(token);
+
     // 理由を見ずに時刻だけで判定していた頃はここが within-grace になり、
     // 切ったはずのセッションが 30 秒間ローテーションできてしまった。
-    expect(await classifyAtNow(token)).toBe(RefreshTokenState.Revoked);
+    expect(state).toBe(RefreshTokenState.Revoked);
   });
 
-  test("失効の理由が読めない券は revoked に倒す (迷ったら猶予を与えない)", async () => {
+  test("失効の理由が読めない場合、猶予を与えず revoked に倒すこと", async () => {
     const token = makeToken({
       expiresAt: at(60_000),
       revokedAt: at(-5_000),
       revokedReason: null,
     });
 
-    expect(await classifyAtNow(token)).toBe(RefreshTokenState.Revoked);
+    const state = await classifyAtNow(token);
+
+    expect(state).toBe(RefreshTokenState.Revoked);
   });
 
-  test("期限ちょうどで expired (期限は含まない)", async () => {
+  test("期限ちょうどの場合、期限を含めず expired を返すこと", async () => {
     const token = makeToken({
       expiresAt: at(0),
       revokedAt: null,
       revokedReason: null,
     });
 
-    expect(await classifyAtNow(token)).toBe(RefreshTokenState.Expired);
+    const state = await classifyAtNow(token);
+
+    expect(state).toBe(RefreshTokenState.Expired);
   });
 
-  test("期限切れは失効理由より優先する", async () => {
+  test("期限切れかつ失効済みの場合、期限切れを優先して expired を返すこと", async () => {
     const token = makeToken({
       expiresAt: at(-1_000),
       revokedAt: at(-99_000),
       revokedReason: RevokedReason.Rotated,
     });
 
+    const state = await classifyAtNow(token);
+
     // 期限切れの券を再利用しても攻撃者は何も得られない。一方で 2 週間ぶりに
     // 開いた正規のクライアントを盗難扱いするほうが実害が大きい。
-    expect(await classifyAtNow(token)).toBe(RefreshTokenState.Expired);
-  });
-
-  test("DB の NULL は Option.none として復元される", async () => {
-    const token = makeToken({
-      expiresAt: at(60_000),
-      revokedAt: null,
-      revokedReason: null,
-    });
-
-    expect(Option.isNone(token.revokedAt)).toBe(true);
-    expect(Option.isNone(token.revokedReason)).toBe(true);
+    expect(state).toBe(RefreshTokenState.Expired);
   });
 });

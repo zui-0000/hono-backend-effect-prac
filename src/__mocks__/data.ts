@@ -45,13 +45,6 @@ export const FAKE_ACCESS_TOKEN =
 /** 偽 AccessTokenIssuer が返す claims。sub は利用者、sid はセッション。 */
 export const FAKE_CLAIMS = { sub: FIXED_UUID, sid: OTHER_UUID };
 
-/** 契約を満たす作成リクエストのボディ。 */
-export const validBody = {
-  name: "アスカ",
-  mailAddress: "asuka@example.com",
-  password: "SuperSecret123!",
-};
-
 /**
  * 全リクエスト共通のヘッダ。
  *

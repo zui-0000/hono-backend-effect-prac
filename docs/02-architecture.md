@@ -641,12 +641,98 @@ routes（契約検証）→ controller → command → domain → ポート
 
 だから 1 ケースで `handleWithEffect` の契約検証・`decodeInput` の値オブジェクト変換・
 ドメインの業務ルール・`handleErrorResponse` のエラー翻訳・応答スキーマの検証まで
-まとめて通る。**ファイル名は controller に合わせるが、試しているのはエンドポイント**
-であって controller 単体ではない。
+まとめて通る。**ファイル名と describe は controller に合わせるが、試しているのは
+エンドポイント**であって controller 単体ではない。
 
 この形の強さは実証済みで、プレゼンテーション層を 13 段階作り替えても、
 `Database` を Layer 化しても、`shared/db` を丸ごと移動しても、
 HTTP 境界のテストは 1 行も変えずに通り続けた。**契約は動かないので縫い目も動かない。**
+
+### describe の表題はモジュールの `.name`
+
+```ts
+describe(classifyRefreshToken.name, ...)  // 単体
+describe(loginController.name, ...)       // API
+```
+
+単体でも API でも同じ規則にする。表題は「**このファイルが何についてのファイルか**」で、
+リネームに追従してほしいもの。文字列で書くと、リネーム後も表題だけ古い名前で残る。
+
+API 側を `"POST /auth/login"` と書く案は退けた。読み物としては勝るが、
+**エンドポイントは request ヘルパーに 1 箇所だけ書いてある**ので表題で重ねる必要がなく、
+規則が 2 本に割れるほうの損が大きい。
+
+**`.name` を使ってよいのは関数のエクスポートだけ。** 値オブジェクトや集約の
+スキーマに使うと `"TypeLiteralClass"` という別物が表題になる — `Schema.Struct` が
+クラスを返すためで、**TS も止めてくれない**（型は `string` で通る）。
+`as const` の表と Effect の値は object なので TS2339 で弾かれる。
+
+しかも bun は通ったテストの名前を出さないので、**失敗するまで気付けない**。
+スキーマを対象にするときは文字列で書く。
+
+### ケースの表題は「〜の場合、〜すること」で揃える
+
+```ts
+test("猶予期間を 1 ミリ秒でも過ぎた場合、盗難のサインとして reused を返すこと", ...)
+test("Bearer が無い場合、401 を返し、失効も走らないこと", ...)
+```
+
+**条件と期待をどちらも書かせる**ための型。片方しか書けない表題は、たいてい
+テストの中身も曖昧になっている。書けないなら 1 ケースに 2 つ混ざっているサイン。
+
+実際に効いた。旧「猶予期間の境界 (30 秒ちょうど) は内側に含む」は、読むと分かった
+気になるが**条件も期待も曖昧**で、境界のどちら側の話なのかも何が返るのかも書いていない。
+型に嵌めて初めて「失効からちょうど 30 秒の場合、境界を内側に含めて within-grace を
+返すこと」になり、何を守っているかが読めるようになった。
+
+### 正常系 / 異常系 は describe のネストで分ける
+
+```ts
+describe(loginController.name, () => {
+  const requestBody = { ... } satisfies typeof LoginBody.Encoded;
+
+  describe("正常系", () => { ... });
+  describe("異常系", () => { ... });
+});
+```
+
+表題の接頭辞（`正常系: ...`）にはしない。接頭辞だと表題ごとに同じ語が並ぶが、
+階層なら**分類として一度だけ**現れる。失敗時の出力も
+`loginController > 異常系 > ...` と読めるようになる。
+
+共通の値（`requestBody` や fixture）は外側の describe に置く。両方から見えるので、
+分類のために書き分ける必要はない。
+
+**単体テストはネストしない。** `classifyRefreshToken` の 9 ケースは 5 つの状態を
+返し分けるだけで、どれも正常な動作。無理に分けると嘘の分類になる。
+
+### ケースの中身は arrange / act / assert の 3 ブロック
+
+```ts
+test("存在しない id の場合、404 を返し、永続化も走らないこと", async () => {
+  const updated: User[] = [];
+  const runtime = makeRuntime({ ... });   // arrange
+
+  const response = await putUser(runtime, FIXED_UUID, requestBody);  // act
+
+  expect(response.status).toBe(HttpStatus.NotFound);                 // assert
+  expect(updated).toStrictEqual([]);
+});
+```
+
+**空行で 3 つに割るだけで、`// Arrange` のようなラベルは書かない。**
+コメントは「なぜ」を書く場所という規約（[CLAUDE.md](../CLAUDE.md)）と衝突するし、
+形が揃っていれば区切りは空行で読める。
+
+崩れやすいのは 2 箇所で、どちらも「1 行にまとめると短くて気持ちいい」ために起きる。
+
+```ts
+const response = await getUser(makeRuntime(), id); // arrange が act に埋まる
+expect(await classifyAtNow(token)).toBe(Usable); // act が assert に埋まる
+```
+
+後者がとくに悪い。**失敗したときに「何を実行した結果か」が出力から消える**し、
+act の戻り値を 2 回以上検証したくなった瞬間に書き直しになる。
 
 ### 横断的な振る舞いは `shared/presentation/__tests__/` へ
 
@@ -661,9 +747,74 @@ HTTP 境界のテストは 1 行も変えずに通り続けた。**契約は動�
 しかも **忘れても緑になる**ので気付けない（テストが実行されていないのに成功に見える）。
 除外形なら、忘れたときに「余計に実行される」方向に倒れる。
 
+### リクエストのボディは `requestBody` で、契約の `Encoded` 型で縛る
+
+```ts
+const requestBody = {
+  mailAddress: "login@example.com",
+  password: "SuperSecret123!",
+} satisfies typeof LoginBody.Encoded;
+```
+
+名前は全ファイルで `requestBody` に揃える（かつては `credentials` / `passwordBody` /
+`updateBody` / `validBody` と散っていた）。ヘッダを渡す引数も `requestHeaders`。
+
+型は生成スキーマの **`Encoded` 側**を使う。`Type` 側は `S.brand` が付いていて
+素のリテラルを受け付けない（TS1360）。`Encoded` はワイヤに載る形そのものなので、
+**テストが組み立てたいものと一致する**。
+
+これで契約とのズレが型で止まる:
+
+| 書き間違い                      | 結果                     |
+| ------------------------------- | ------------------------ |
+| 契約に無いフィールドを足す      | TS2353                   |
+| 必須フィールドを落とす          | TS2741                   |
+| 契約がフィールド名を変えた      | 次の生成でテストが落ちる |
+| `password: "short"`（長さ違反） | **通る** — 精製は実行時  |
+
+最後の行が肝で、`satisfies` が守るのは**形だけ**。値の制約（`minLength` 等）は
+実行時の検証なので、そこはテスト本文が 400 を確かめる担当になる。
+逆に言えば、400 のケースでわざと不正な値を渡しても型は邪魔をしない。
+
+### 応答の検証は `toStrictEqual`。`toMatchObject` は使わない
+
+```ts
+expect(await response.json()).toStrictEqual({
+  errorCode: ErrorCode.BadRequest,
+  message: ErrorMessage.BadRequest,
+  details: [{ field: "password", message: expect.any(String) }],
+});
+```
+
+`toMatchObject` は**部分一致**なので、「余計なものを返していないこと」を守れない。
+API の応答でいちばん怖いのは**余計なフィールドが増えること**（ハッシュ済みパスワードが
+混ざる、内部の例外が漏れる）で、部分一致はそれをすべて見逃す。
+
+実際に測ってある。`errorBody` に `extra: 1` を足す変異を入れると、
+`toStrictEqual` に替えた後は **35 件中 18 件が落ちる**。替える前は 1 件も落ちなかった。
+
+`message` を `expect.any(String)` で流さないのも同じ理由。文言は
+`ErrorMessage` の定数なので**そのまま書ける**。書いておけば、汎用エラーに固有の
+文言が紛れ込んだとき（`ErrorMessage` の doc が禁じている状態）に落ちる。
+
+### 例外は `details[].message` だけ
+
+ここだけ `expect.any(String)` を使う。中身は Effect の `ArrayFormatter` が吐く英文
+（`Expected a string at least 12 character(s) long, actual "short"`）で、
+**こちらが決めた文言ではない**。固定すると Effect を上げるたびに、
+振る舞いが何も変わっていないのにテストが落ちる。
+
+守れているのは `field` の値と、`details` の**要素数**。`errors: "all"` で全違反を
+集めているので、要素数が固定されることには意味がある（1 つのつもりが 2 つ出ていたら落ちる）。
+`expect.any(String)` が素通りではないことも変異で確認済み（`message` を落とすと 7 件落ちる）。
+
 ### テストは境界検査の対象外
 
-`.dependency-cruiser.mjs` で `__tests__` と `__mocks__` を除外している。
+**検査器が 2 つあるので、両方に同じ穴を開ける。**
+
+- `.dependency-cruiser.mjs` … `exclude: { path: "(__tests__|__mocks__)/" }`
+- `.oxlintrc.jsonc` … 最後の override で `no-restricted-imports` を `"off"`
+
 ルールが守っているのは**本番コードの構造**で、テストは元からその外側にいる。
 
 とくに API テストは `createApp` を組み立てるため、合成ルート（`main.ts` /
@@ -672,8 +823,17 @@ HTTP 境界のテストは 1 行も変えずに通り続けた。**契約は動�
 含まれるため）。**コロケーションを選ぶ以上この除外は必須**で、
 `src/__tests__/` に置いていた頃は `src` 直下 = `PORT_SIDE` の外だったので露見しなかった。
 
-除外しすぎていないこと（本番コードでは今もルールが効くこと）は、
-わざと違反するファイルを作って確認している。
+oxlint 側は後から気付いた。リクエストのボディを契約の型で縛ろうとしたところ、
+`~/generated` の参照が `shared/presentation/__tests__/` で弾かれた。
+**契約こそが API テストの試験対象**なので、ここを禁じると
+「契約と一致していること」を型で確かめる手段が無くなる。
+
+oxlint は `ignorePatterns` で丸ごと外さない。それだと未使用変数の検出まで消える。
+切るのは境界ルールだけで、`overrides` は後勝ちなので**必ず配列の最後に置く**。
+
+除外しすぎていないことは、わざと違反するファイルを 4 つ作って確認した
+（本番の `domain` から `~/generated` → 検出 / `__tests__` から → 素通り /
+`__tests__` の未使用変数 → 検出）。
 
 ### `__mocks__` に入れるもの
 
@@ -693,7 +853,7 @@ HTTP 境界のテストは 1 行も変えずに通り続けた。**契約は動�
 
 ```jsonc
 // 200 GET /users/{id}
-{ "name": "アスカ", "mailAddress": "asuka@example.com" }
+{ "name": "取得ユーザー", "mailAddress": "fetched@example.com" }
 // 201 POST /users
 { "id": "019fbf41-5fcd-7000-b147-14f2ed63cf2f" }
 // エラー

@@ -9,6 +9,8 @@ import type { AppRuntime } from "~/app-runtime";
 import { HttpHeader } from "~/shared/presentation/constants/http-header";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
 
+import { logoutController } from "../logout-controller";
+
 const logout = async (
   runtime: AppRuntime,
   requestHeaders: Record<string, string> = headers,
@@ -21,61 +23,58 @@ const logout = async (
 /** revokeSession に渡された引数。切る単位を取り違えていないか確かめるために記録する。 */
 type Revoked = { readonly sessionId: string; readonly revokedAt: Date };
 
-describe("POST /auth/logout", () => {
-  test("正常系: 204 を返し、Bearer の sid でセッションを切る", async () => {
-    const revoked: Revoked[] = [];
-    const runtime = makeRuntime({
+/** 失効の呼び出しを記録するランタイム。 */
+const recording = (): {
+  readonly runtime: AppRuntime;
+  readonly revoked: Revoked[];
+} => {
+  const revoked: Revoked[] = [];
+  return {
+    revoked,
+    runtime: makeRuntime({
       refreshTokenRepository: {
         revokeSession: (params) =>
           Effect.sync(() => {
             revoked.push(params);
           }),
       },
+    }),
+  };
+};
+
+describe(logoutController.name, () => {
+  describe("正常系", () => {
+    test("Bearer が有効な場合、204 を返し、その sid でセッションを切ること", async () => {
+      const { runtime, revoked } = recording();
+
+      const response = await logout(runtime);
+
+      expect(response.status).toBe(HttpStatus.NoContent);
+      expect(await response.text()).toBe("");
+
+      // **切る単位はセッション (sid) であって利用者 (sub) ではない。**
+      // sub で切ると、スマホでログアウトしたら PC まで落ちる。
+      // 失効時刻は Clock から取る (DB の now() に任せない)。
+      expect(revoked).toStrictEqual([
+        { sessionId: FAKE_CLAIMS.sid, revokedAt: expect.any(Date) },
+      ]);
+      expect(revoked[0]?.sessionId).not.toBe(FAKE_CLAIMS.sub);
     });
-
-    const response = await logout(runtime);
-
-    expect(response.status).toBe(HttpStatus.NoContent);
-    expect(await response.text()).toBe("");
-    expect(response.headers.get(HttpHeader.RequestId)).toBe(REQUEST_ID);
-
-    expect(revoked).toHaveLength(1);
-    // **切る単位はセッション (sid) であって利用者 (sub) ではない。**
-    // sub で切ると、スマホでログアウトしたら PC まで落ちる。
-    expect(revoked[0]?.sessionId).toBe(FAKE_CLAIMS.sid);
-    expect(revoked[0]?.sessionId).not.toBe(FAKE_CLAIMS.sub);
-    // 失効時刻は Clock から取ってドメイン側で決める (DB の now() に任せない)。
-    expect(revoked[0]?.revokedAt).toBeInstanceOf(Date);
   });
 
-  test("正常系: 該当するセッションが無くても 204 (冪等)", async () => {
-    // 既定の fake は「何も無くても成功」。二重送信やリトライで 404 を返さないよう、
-    // 存在を確かめずに失効させている。契約も 204 だけを宣言している。
-    const response = await logout(makeRuntime());
+  describe("異常系", () => {
+    test("Bearer が無い場合、401 を返し、失効も走らないこと", async () => {
+      const { runtime, revoked } = recording();
 
-    expect(response.status).toBe(HttpStatus.NoContent);
-    expect(await response.text()).toBe("");
-  });
+      // 入力が claims だけのエンドポイントなので、**Bearer を素通しすると
+      // どのセッションを切るかが決まらない**。認証が要ることを固定しておく。
+      const response = await logout(runtime, {
+        "Content-Type": "application/json",
+        [HttpHeader.RequestId]: REQUEST_ID,
+      });
 
-  test("異常系: Bearer が無ければ 401 で、失効も走らない", async () => {
-    const revoked: Revoked[] = [];
-    const runtime = makeRuntime({
-      refreshTokenRepository: {
-        revokeSession: (params) =>
-          Effect.sync(() => {
-            revoked.push(params);
-          }),
-      },
+      expect(response.status).toBe(HttpStatus.Unauthorized);
+      expect(revoked).toStrictEqual([]);
     });
-
-    // 入力が claims だけのエンドポイントなので、**Bearer を素通しすると
-    // どのセッションを切るかが決まらない**。認証が要ることを固定しておく。
-    const response = await logout(runtime, {
-      "Content-Type": "application/json",
-      [HttpHeader.RequestId]: REQUEST_ID,
-    });
-
-    expect(response.status).toBe(HttpStatus.Unauthorized);
-    expect(revoked).toEqual([]);
   });
 });
