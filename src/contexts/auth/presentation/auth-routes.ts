@@ -13,9 +13,9 @@ import { HttpStatus } from "~/shared/presentation/constants/http-status";
 import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
 
 import type { AuthRuntime } from "../auth-runtime";
-import { loginController } from "./login-controller";
-import { logoutController } from "./logout-controller";
-import { refreshController } from "./refresh-controller";
+import { loginController } from "./controllers/login-controller";
+import { logoutController } from "./controllers/logout-controller";
+import { refreshController } from "./controllers/refresh-controller";
 
 /**
  * auth コンテキストの HTTP 経路。パスは TypeSpec の @route と対応する

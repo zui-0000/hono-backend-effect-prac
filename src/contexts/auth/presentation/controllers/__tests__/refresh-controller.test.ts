@@ -46,7 +46,7 @@ const refresh = async (
  * 保存済みの券を組み立てる。
  *
  * **状態の判定そのものは単体テストが持っている**
- * ([`refresh-token.test.ts`](../../domain/model/__tests__/refresh-token.test.ts))。
+ * ([`refresh-token.test.ts`](../../../domain/model/__tests__/refresh-token.test.ts))。
  * ここで確かめるのは、判定の結果が HTTP の応答と副作用に正しく繋がっているか。
  */
 const makeStored = (

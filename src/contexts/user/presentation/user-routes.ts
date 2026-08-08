@@ -20,11 +20,11 @@ import { HttpStatus } from "~/shared/presentation/constants/http-status";
 import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
 
 import type { UserRuntime } from "../user-runtime";
-import { changePasswordController } from "./change-password-controller";
-import { createUserController } from "./create-user-controller";
-import { deleteUserController } from "./delete-user-controller";
-import { getUserController } from "./get-user-controller";
-import { updateUserController } from "./update-user-controller";
+import { changePasswordController } from "./controllers/change-password-controller";
+import { createUserController } from "./controllers/create-user-controller";
+import { deleteUserController } from "./controllers/delete-user-controller";
+import { getUserController } from "./controllers/get-user-controller";
+import { updateUserController } from "./controllers/update-user-controller";
 
 /**
  * user コンテキストの HTTP 経路。パスは TypeSpec の @route と対応する

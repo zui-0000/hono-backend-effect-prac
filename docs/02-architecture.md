@@ -22,7 +22,7 @@ src/
 │     ├─ domain/        #     model/（集約 + value-objects/）, services/（ドメインサービス）, ポート
 │     ├─ application/   #     command / query（CQRS）
 │     ├─ infrastructure/#     テーブル定義 / リポジトリ実装（domain ↔ DB 変換, Layer）
-│     └─ presentation/  #     <ctx>-routes.ts（HTTP 契約の宣言）+ controller
+│     └─ presentation/  #     <ctx>-routes.ts（HTTP 契約の宣言）+ controllers/
 ├─ shared/
 │  ├─ domain/           # 共有カーネル。model/ が語彙（uuid.ts + value-objects/）、
 │  │                    #   直下はドメインが環境から得るもの（時刻 / 採番 / ハッシュ化）
@@ -200,6 +200,26 @@ application も presentation も影響を受けない。
 > `validate*` を presentation に予約したのとは扱いが違う。あちらは同じ語が層をまたぐと
 > 別の意味になってしまうので分けた。`handle` は**どの層でも「失敗をその層の言葉に直す」**で
 > 意味が割れないため、層をまたいで使う。
+
+### presentation は `<ctx>-routes.ts` と `controllers/` に分ける
+
+```text
+presentation/
+├─ <ctx>-routes.ts     契約の宣言（パス・スキーマ・ステータス）
+└─ controllers/        エンドポイント 1 本ぶんの繋ぎ
+   └─ __tests__/
+```
+
+**種類が違うものを並べない。** routes は「この コンテキストが HTTP に何を見せるか」の
+一覧で、controller は 1 本ぶんの数行。フラットに置くと、ファイル一覧で
+どれが入口か読めない。`domain/` が同じ形をしている（ポートが直下、`model/` と
+`services/` が下）ので、層をまたいで揃う。
+
+`<ctx>-routes.ts` を `contexts/<ctx>/` 直下（`<ctx>-layer.ts` の隣）へ出す案は退けた。
+語感は揃うが、**あそこは実装を知ってよい区画**として定義してある（`PORT_SIDE` の外）。
+移すと routes が `infrastructure/` を掴んでも誰も咎めなくなる — 実際に動かして測ると、
+わざと `UserRepositoryLive` を掴ませたときの検出が **10 件から 0 件**になった。
+`~/generated` の参照も両方の lint に弾かれるので、穴を開ける必要も生じる。
 
 ---
 
@@ -616,7 +636,7 @@ changeUserPassword  → updatePassword   （hashedPassword / updatedAt を書く
 
 ```text
 src/contexts/auth/domain/model/__tests__/refresh-token.test.ts       単体
-src/contexts/user/presentation/__tests__/get-user-controller.test.ts API
+src/contexts/user/presentation/controllers/__tests__/get-user-controller.test.ts API
 src/shared/presentation/__tests__/verify-bearer.test.ts              API（横断）
 src/__mocks__/                                                       テストの資材
 ```
@@ -818,7 +838,7 @@ API の応答でいちばん怖いのは**余計なフィールドが増える�
 ルールが守っているのは**本番コードの構造**で、テストは元からその外側にいる。
 
 とくに API テストは `createApp` を組み立てるため、合成ルート（`main.ts` /
-`app-runtime.ts`）と同じく全アダプタへ経路が繋がる。実際 `presentation/__tests__/` へ
+`app-runtime.ts`）と同じく全アダプタへ経路が繋がる。実際 `presentation/` の下へ
 移した瞬間に `no-indirect-path-to-impl` が発火した（あのディレクトリは `PORT_SIDE` に
 含まれるため）。**コロケーションを選ぶ以上この除外は必須**で、
 `src/__tests__/` に置いていた頃は `src` 直下 = `PORT_SIDE` の外だったので露見しなかった。

@@ -41,7 +41,6 @@ export type ChangePasswordCommandInput = typeof ChangePasswordCommandInput.Type;
  *
  * 契約上は要認証 (Bearer) で、本人確認はその上でさらに現在のパスワードを求める
  * 二重の防御 (トークンを盗まれてもパスワードは変えられない)。
- * 認証そのものは auth コンテキストの実装後に追加する。
  */
 export const changePasswordCommand = (
   input: ChangePasswordCommandInput,

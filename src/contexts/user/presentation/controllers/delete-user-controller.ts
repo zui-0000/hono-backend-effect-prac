@@ -11,10 +11,6 @@ type DeleteUserControllerInput = { params: typeof DeleteUserParams.Type };
 
 /**
  * ユーザーを削除する (DELETE /users/{id})。
- *
- *
- * リクエストの契約検証と応答の組み立ては user-routes.ts が行う。
- * 契約上は要認証 (Bearer) だが、認証は auth コンテキストの実装後に追加する。
  */
 export const deleteUserController = ({ params }: DeleteUserControllerInput) =>
   Effect.gen(function* () {

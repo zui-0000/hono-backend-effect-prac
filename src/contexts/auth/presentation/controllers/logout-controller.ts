@@ -6,7 +6,7 @@ import { decodeInput } from "~/shared/presentation/request-validator";
 import {
   LogoutCommandInput,
   logoutCommand,
-} from "../application/logout-command";
+} from "../../application/logout-command";
 
 type LogoutControllerInput = { auth: AccessTokenClaims };
 

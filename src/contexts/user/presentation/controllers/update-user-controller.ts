@@ -14,9 +14,6 @@ type UpdateUserControllerInput = {
 
 /**
  * ユーザーを更新する (PUT /users/{id})。
- *
- * リクエストの契約検証と応答の組み立ては user-routes.ts が行う。
- * 契約上は要認証 (Bearer) だが、認証は auth コンテキストの実装後に追加する。
  */
 export const updateUserController = ({
   body,
