@@ -23,7 +23,7 @@
   "dependencies": {
     "drizzle-orm": "^0.45.2",
     "effect": "^3.22.1",
-    "hono": "^4.13.0"
+    "hono": "^4.13.1"
   },
   "devDependencies": {
     "@swc/core": "^1.15.47",
