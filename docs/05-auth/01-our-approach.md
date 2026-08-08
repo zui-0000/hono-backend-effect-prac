@@ -3,9 +3,8 @@
 方式そのものの解説は [`00-authentication-methods.md`](00-authentication-methods.md) にある。
 ここは**このリポジトリが何を選び、何をまだ決めていないか**だけを書く。
 
-> **状態**（2026-08-08）: `POST /auth/login` と `POST /auth/refresh` が動作。
-> ローテーション・猶予期間・盗難検出まで実 DB で確認済み。
-> 残るは logout と Bearer 検証ミドルウェア。
+> **状態**（2026-08-09）: login / refresh / logout の 3 本すべてが動作。
+> Bearer の検証も入り、契約が `@useAuth` を宣言している 5 本が実際に閉じた。
 > 残る未決は Cookie への移行だけで、それはフロントの構成が決まるまで動かせない。
 
 ---
@@ -361,6 +360,52 @@ model RefreshResponse {
 
 **項目の追加なのでクライアントは壊れない**（既存の実装は知らない項目を無視する）。
 [`../../CLAUDE.md`](../../CLAUDE.md) の基準では破壊的変更にあたらないため `!` は付けない。
+
+---
+
+## Bearer の検証は routes の宣言に混ぜる
+
+認証を Hono のミドルウェア（`app.use("/users/*", …)`）にはしていない。
+`handleWithEffect` の **第 5 の入力源**として宣言する。
+
+```ts
+handleWithEffect({
+  request: { header: GetUserHeader, params: GetUserParams, auth: true },
+  response: { status: HttpStatus.Ok, body: GetUser200Response },
+  controller: getUserController,
+})(runtime);
+```
+
+理由は 3 つ。
+
+- **契約と 1 対 1 になる。** TypeSpec の `@useAuth(BearerAuth)` が付いている
+  エンドポイントに `auth: true` を書く。routes を見れば認証の要否が
+  他の宣言と同じ場所で読める。パスのパターンで別に管理すると**二重管理になり、
+  付け忘れても何も起きない**。
+- **宣言し忘れが型に出る。** 宣言していない controller が `auth` を触ると
+  コンパイルエラーになる（`header` / `body` / `params` / `query` と同じ扱い）。
+- **controller への受け渡しが型付きになる。** ミドルウェアだと `c.get("claims")` の
+  ような弱い経路が要る。
+
+副次的に、**認証を要求するエンドポイントを持つコンテキストの Runtime に
+`AccessTokenIssuer` が現れる**。要求が型に出るので、結線し忘れは起動前に分かる。
+
+失敗はすべて `UnauthorizedError` に丸める。ヘッダが無い・形式が違う・署名が不正・
+期限切れを書き分けない。検証は**入力の検証をすべて終えたあと**に走らせる
+（契約違反 400 が先に分かるほうが直しやすく、「認証を通さないと入力の不備が
+分からない」状態を避けられる）。
+
+### 契約の嘘を回収した
+
+`@useAuth(BearerAuth)` は 5 本に宣言されていたが、**実装は誰でも通していた**。
+承知のうえで先送りしていた状態で、コード側にも
+「認証は auth コンテキストの実装後に追加する」と書いてあった。
+
+`auth: true` を付けた時点で **HTTP 境界のテストが 11 本落ちた**。落ちたこと自体が
+「これまで認証なしで通っていた」証拠になる。テストには Bearer を送るよう直したうえで、
+**認証が効いていること自体を固定するケースを別に足した**（ヘッダ無しで 401、
+作成だけは 201、署名検証に失敗すれば 401）。
+これが無いと、次に壊れたとき 200 系が返るだけで気付けない。
 
 ---
 

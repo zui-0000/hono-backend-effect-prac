@@ -36,6 +36,10 @@ import { updateUserController } from "./update-user-controller";
  *
  * 生成スキーマ (`~/generated`) を import してよいのは presentation 層だけなので、
  * この結び付けを app.ts (src 直下) に置くことはできない。
+ *
+ * `auth: true` は契約の `@useAuth(BearerAuth)` と 1 対 1。作成 (サインアップ想定) だけが
+ * 認証不要で、残る 4 本は Bearer を要求する。宣言すると handleWithEffect が署名を検証し、
+ * controller の入力に claims が載る。
  */
 export const userRoutes = (runtime: UserRuntime): Hono => {
   const routes = new Hono();
@@ -52,7 +56,7 @@ export const userRoutes = (runtime: UserRuntime): Hono => {
   routes.get(
     "/:id",
     handleWithEffect({
-      request: { header: GetUserHeader, params: GetUserParams },
+      request: { header: GetUserHeader, params: GetUserParams, auth: true },
       response: { status: HttpStatus.Ok, body: GetUser200Response },
       controller: getUserController,
     })(runtime),
@@ -65,6 +69,7 @@ export const userRoutes = (runtime: UserRuntime): Hono => {
         header: UpdateUserHeader,
         body: UpdateUserBody,
         params: UpdateUserParams,
+        auth: true,
       },
       response: { status: HttpStatus.NoContent },
       controller: updateUserController,
@@ -78,6 +83,7 @@ export const userRoutes = (runtime: UserRuntime): Hono => {
         header: ChangePasswordHeader,
         body: ChangePasswordBody,
         params: ChangePasswordParams,
+        auth: true,
       },
       response: { status: HttpStatus.NoContent },
       controller: changePasswordController,
@@ -87,7 +93,11 @@ export const userRoutes = (runtime: UserRuntime): Hono => {
   routes.delete(
     "/:id",
     handleWithEffect({
-      request: { header: DeleteUserHeader, params: DeleteUserParams },
+      request: {
+        header: DeleteUserHeader,
+        params: DeleteUserParams,
+        auth: true,
+      },
       response: { status: HttpStatus.NoContent },
       controller: deleteUserController,
     })(runtime),

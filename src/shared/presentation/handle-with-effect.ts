@@ -2,6 +2,10 @@ import { Effect, type ManagedRuntime, Schema } from "effect";
 import type { Context, Handler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
+import type {
+  AccessTokenClaims,
+  AccessTokenIssuer,
+} from "~/shared/domain/access-token-issuer";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
 
 import { HttpHeader } from "./constants/http-header";
@@ -18,6 +22,7 @@ import {
   validateParams,
   validateQuery,
 } from "./request-validator";
+import { verifyBearer } from "./verify-bearer";
 
 /**
  * リクエストのどの入力源を契約で検証するかの宣言。
@@ -31,6 +36,14 @@ type RequestSchemas = {
   readonly body?: Schema.Schema.AnyNoContext;
   readonly params?: Schema.Schema.AnyNoContext;
   readonly query?: Schema.Schema.AnyNoContext;
+  /**
+   * 認証を要求するか。契約の `@useAuth(BearerAuth)` と対になる。
+   *
+   * 他の入力源と違ってスキーマではなく true を書くのは、検証の相手が
+   * リクエストの一部ではなく**署名そのもの**だから。宣言すると
+   * controller の入力に検証済みの claims (`auth`) が載る。
+   */
+  readonly auth?: true;
 };
 
 /**
@@ -45,7 +58,9 @@ type ValidatedRequest<Req extends RequestSchemas> = {
     : never]: Req[K] extends Schema.Schema<infer A, infer _I, never>
     ? A
     : never;
-};
+} & (true extends Req["auth"]
+  ? { readonly auth: AccessTokenClaims }
+  : Record<never, never>);
 
 /** controller が受け取る引数。検証済みの入力に加え、生の Context も渡す。 */
 type ControllerInput<Req extends RequestSchemas> = ValidatedRequest<Req> & {
@@ -93,7 +108,7 @@ type ContentfulSpec<A, ResponseA, ResponseI, Req extends RequestSchemas, R> = {
 const validateRequest = <Req extends RequestSchemas>(
   c: Context,
   request: Req,
-): Effect.Effect<ControllerInput<Req>, ApplicationError> =>
+): Effect.Effect<ControllerInput<Req>, ApplicationError, AccessTokenIssuer> =>
   Effect.gen(function* () {
     const validated: Record<string, unknown> = { c };
 
@@ -109,6 +124,11 @@ const validateRequest = <Req extends RequestSchemas>(
     if (request.query !== undefined) {
       validated["query"] = yield* validateQuery(c, request.query);
     }
+    // 認証は最後に見る。契約違反 (400) のほうが先に分かるほうが直しやすく、
+    // かつ「認証を通さないと入力の不備が分からない」状態を避けられる。
+    if (request.auth === true) {
+      validated["auth"] = yield* verifyBearer(c);
+    }
 
     return validated as ControllerInput<Req>;
   });
@@ -118,7 +138,7 @@ const validateRequest = <Req extends RequestSchemas>(
  *
  * 実行の流れ:
  *   1. 相関 ID を解決し、応答ヘッダに載せる
- *   2. リクエストを API 契約で検証する (ヘッダ → ボディ → パス → クエリ)
+ *   2. リクエストを API 契約で検証する (ヘッダ → ボディ → パス → クエリ → 認証)
  *   3. controller を実行する
  *   4. 結果を HTTP 応答に変換する (respond)
  *
@@ -141,7 +161,12 @@ const handle =
     ) => Effect.Effect<A, ApplicationError, R>,
     respond: (c: Context, value: A) => Effect.Effect<Response>,
   ) =>
-  (runtime: ManagedRuntime.ManagedRuntime<R | UuidGenerator, never>): Handler =>
+  (
+    runtime: ManagedRuntime.ManagedRuntime<
+      R | UuidGenerator | AccessTokenIssuer,
+      never
+    >,
+  ): Handler =>
   async (c) =>
     await runtime.runPromise(
       Effect.gen(function* () {
@@ -218,7 +243,10 @@ export const handleWithEffect = <
 >(
   spec: NoContentSpec<Req, R> | ContentfulSpec<A, ResponseA, ResponseI, Req, R>,
 ): ((
-  runtime: ManagedRuntime.ManagedRuntime<R | UuidGenerator, never>,
+  runtime: ManagedRuntime.ManagedRuntime<
+    R | UuidGenerator | AccessTokenIssuer,
+    never
+  >,
 ) => Handler) => {
   if (isContentful(spec)) {
     const { status, body: bodySchema } = spec.response;

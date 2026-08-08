@@ -77,6 +77,9 @@ const FAKE_TOKEN_HASH =
 /** 偽のアクセストークン。契約が 3 セグメント形式を要求するので形は揃える。 */
 const FAKE_ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.signature";
 
+/** 偽 AccessTokenIssuer が返す claims。sid はセッション、sub は利用者。 */
+const FAKE_CLAIMS = { sub: FIXED_UUID, sid: OTHER_UUID };
+
 /** テスト用ランタイム。検証したいサービスだけケースごとに部分差し替えする。 */
 const makeRuntime = (
   overrides: {
@@ -126,7 +129,8 @@ const makeRuntime = (
       }),
       Layer.succeed(AccessTokenIssuer, {
         issue: () => Effect.succeed(FAKE_ACCESS_TOKEN),
-        verify: () => Effect.fail(new UnauthorizedError()),
+        // 既定は「検証を通る」。認証の失敗経路を見るケースだけ差し替える。
+        verify: () => Effect.succeed(FAKE_CLAIMS),
         ...overrides.accessTokenIssuer,
       }),
       Layer.succeed(VerifyCredentialsQueryService, {
@@ -141,6 +145,9 @@ const makeRuntime = (
 const headers = {
   "Content-Type": "application/json",
   [HttpHeader.RequestId]: REQUEST_ID,
+  // 契約が @useAuth(BearerAuth) を宣言している 4 本に要る。
+  // 認証不要な createUser でも余分なヘッダは無視されるので共通にする。
+  [HttpHeader.Authorization]: `Bearer ${FAKE_ACCESS_TOKEN}`,
 };
 
 const postUsers = async (
@@ -559,6 +566,74 @@ describe("DELETE /users/:id", () => {
     expect(await response.json()).toMatchObject({
       errorCode: ErrorCode.BadRequest,
       details: [{ field: "id" }],
+    });
+  });
+});
+
+describe("認証 (Bearer)", () => {
+  /**
+   * 契約が `@useAuth(BearerAuth)` を宣言しているエンドポイントで、
+   * **実際に Bearer を要求していること**を固定する。
+   *
+   * ここが壊れると「契約は要認証と言っているのに誰でも通る」状態に戻るが、
+   * 応答は 200 系のままなので**気付けない**。実際、auth の実装前はその状態だった。
+   */
+  const withoutAuth = {
+    "Content-Type": "application/json",
+    [HttpHeader.RequestId]: REQUEST_ID,
+  };
+
+  test("Authorization が無ければ 401 (認証を要求する 4 本すべて)", async () => {
+    const runtime = makeRuntime();
+    const app = createApp(runtime);
+    const id = FIXED_UUID;
+
+    const responses = await Promise.all([
+      app.request(`/users/${id}`, { headers: withoutAuth }),
+      app.request(`/users/${id}`, {
+        method: "PUT",
+        headers: withoutAuth,
+        body: JSON.stringify({ name: "新", mailAddress: "new@example.com" }),
+      }),
+      app.request(`/users/${id}/password`, {
+        method: "PUT",
+        headers: withoutAuth,
+        body: JSON.stringify({
+          currentPassword: "SuperSecret123!",
+          newPassword: "BrandNewSecret456!",
+        }),
+      }),
+      app.request(`/users/${id}`, { method: "DELETE", headers: withoutAuth }),
+    ]);
+
+    for (const response of responses) {
+      expect(response.status).toBe(HttpStatus.Unauthorized);
+    }
+  });
+
+  test("作成は認証不要 (サインアップ想定なので Bearer 無しで通る)", async () => {
+    const runtime = makeRuntime();
+
+    const response = await createApp(runtime).request("/users", {
+      method: "POST",
+      headers: withoutAuth,
+      body: JSON.stringify(validBody),
+    });
+
+    expect(response.status).toBe(HttpStatus.Created);
+  });
+
+  test("署名の検証に失敗すれば 401 (ヘッダが在っても通さない)", async () => {
+    const runtime = makeRuntime({
+      accessTokenIssuer: { verify: () => Effect.fail(new UnauthorizedError()) },
+    });
+
+    const response = await getUser(runtime, FIXED_UUID);
+
+    expect(response.status).toBe(HttpStatus.Unauthorized);
+    expect(await response.json()).toEqual({
+      errorCode: ErrorCode.Unauthorized,
+      message: expect.any(String),
     });
   });
 });

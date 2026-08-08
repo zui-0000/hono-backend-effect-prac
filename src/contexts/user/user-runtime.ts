@@ -1,5 +1,6 @@
 import type { ManagedRuntime } from "effect";
 
+import type { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import type { PasswordHasher } from "~/shared/domain/password-hasher";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
 
@@ -22,6 +23,12 @@ import type { UserRepository } from "./domain/user-repository";
  * AppRuntime はこれより多くを提供するので、そのまま渡せる。
  */
 export type UserRuntime = ManagedRuntime.ManagedRuntime<
-  UserRepository | GetUserQueryService | PasswordHasher | UuidGenerator,
+  | UserRepository
+  | GetUserQueryService
+  | PasswordHasher
+  // Bearer の検証は handleWithEffect が行うため、認証を要求するエンドポイントが
+  // 1 本でもあるコンテキストはこれを要求する。
+  | AccessTokenIssuer
+  | UuidGenerator,
   never
 >;

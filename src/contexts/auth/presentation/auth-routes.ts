@@ -4,6 +4,7 @@ import {
   Login200Response,
   LoginBody,
   LoginHeader,
+  LogoutHeader,
   Refresh200Response,
   RefreshBody,
   RefreshHeader,
@@ -13,14 +14,15 @@ import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
 
 import type { AuthRuntime } from "../auth-runtime";
 import { loginController } from "./login-controller";
+import { logoutController } from "./logout-controller";
 import { refreshController } from "./refresh-controller";
 
 /**
  * auth コンテキストの HTTP 経路。パスは TypeSpec の @route と対応する
  * (このルータ自体は app.ts が "/auth" にマウントするので、ここでは相対パス)。
  *
- * logout は未実装。Bearer の検証ミドルウェアが入ってから足す
- * (段取りは docs/05-auth/01-our-approach.md)。
+ * logout だけが認証を要する。`auth: true` を宣言すると handleWithEffect が
+ * Bearer を検証し、controller の入力に claims が載る。
  */
 export const authRoutes = (runtime: AuthRuntime): Hono => {
   const routes = new Hono();
@@ -40,6 +42,15 @@ export const authRoutes = (runtime: AuthRuntime): Hono => {
       request: { header: RefreshHeader, body: RefreshBody },
       response: { status: HttpStatus.Ok, body: Refresh200Response },
       controller: refreshController,
+    })(runtime),
+  );
+
+  routes.post(
+    "/logout",
+    handleWithEffect({
+      request: { header: LogoutHeader, auth: true },
+      response: { status: HttpStatus.NoContent },
+      controller: logoutController,
     })(runtime),
   );
 
