@@ -5,12 +5,146 @@
 
 ---
 
+## 次にやること
+
+やりたい順ではなく、**着手するとき何を見ればいいか**を書く。
+
+### 1. `handleWithEffect` と認証判定の仕組みの見直し
+
+> ⚠️ **いま分かっている穴: 認証はあるが認可が無い。**
+> `auth: true` が保証するのは「Bearer の署名が通ること」だけ。controller は
+> `params.id` しか見ておらず、**`claims.sub` と突き合わせていない**。
+> つまり有効なトークンを 1 つ持っていれば、**他人の id を指定して取得・更新・削除・
+> パスワード変更ができる**（要認証の 4 本すべて）。テストも 401 になることしか
+> 見ていないので、この状態は 200 系で通る。
+
+#### 参考にする記事
+
+[DDD×CQRS の認可設計 — コマンドとクエリで異なる権限チェックをどこに置くか](https://zenn.dev/135yshr/articles/60d7d006c0f38f)
+
+主張は**認可を 2 段に分ける**こと。
+
+| 粒度   | 判断基準                | 置き場                           | うちの現状            |
+| ------ | ----------------------- | -------------------------------- | --------------------- |
+| 粗粒度 | ロール / エンドポイント | middleware                       | ロールが無いので空    |
+| 細粒度 | リソースの所有者・状態  | application + domain（ポリシー） | **どこにも無い** ← 穴 |
+
+`verifyBearer` が「トークンを検証して claims を出すところまで」で止まっているのは、
+記事の推奨どおりの形。足りないのは細粒度のほう。
+
+記事が挙げるアンチパターンのうち、**うちが踏みかけているのは 1 つ目**
+（handler に認可を埋める）。4 本の controller に `if (auth.sub !== params.id)` を
+書くのがいちばん短い直し方だが、ドメイン知識が散り、修正漏れの温床になる。
+2 つ目（middleware で全面的にやる）は構造が既に防いでいる — `verifyBearer` は
+`shared/` にあり、境界ルールで `contexts/` を参照できない。
+4 つ目（エラーに内部情報を載せる）は `UnauthorizedError` が `message` を持たない形で
+既に守れている。
+
+#### コードの側から既に答えが出ている論点
+
+**コマンドとクエリで、取りうる形が違う。**
+
+```ts
+// コマンド: 集約を復元するので「引いてから照合」ができる
+UpdateUserCommandInput = { id, name, mailAddress }; // ← actor を足せる
+
+// クエリ: 射影に id が無いので「引いてから照合」が原理的にできない
+GetUserQueryOutput = { name, mailAddress };
+```
+
+`GetUserQueryOutput` から `id` を落としたのは
+[読み取り用の射影として意図的にそぎ落とした](02-architecture.md)結果だが、
+そのおかげで**クエリ側は記事の言う「可視性制御」しか選べない** —
+`execute` に actor を渡してクエリ自体を絞る形になる。
+副産物として「見つからない」と「権限が無い」が同じ `Option.none` に畳まれ、
+**存在を漏らさない 404 が構造から落ちてくる**。
+
+#### 決めること
+
+1. **actor をどこまで運ぶか。** controller で `claims.sub` を `UserId` へ変換して
+   command / query の入力に足す（`logout` が `sid` → `SessionId` でやっているのと同じ形）。
+2. **判定をどこに置くか。** 記事はポリシーオブジェクトを推すが、
+   いまルールは「本人だけ」の 1 つしかない。
+   [実例が 1 つの間は抽象化しない](#db-呼び出しのラッパをどこまで共有するか)という
+   この repo の方針に従えば、まずは `domain/services/` に名前付きの関数を 1 本置く形が近い
+   （`checkMailAddressDuplication` と同じ置き場）。
+3. **契約に 403 を足すか、404 に畳むか。** 自分のリソースだけという規則なら、
+   403 は「その id の利用者は存在する」と教えることになる。404 に畳めば
+   契約の変更も要らない（いまの宣言は 401 / 404）。
+
+#### 認証を Hono の middleware へ降ろすか（見送り中）
+
+「`handleWithEffect` が太い」ことへの対処として検討し、**いまは見送った**。
+記事の言う middleware は**層の話**であって Hono の API の話ではなく、
+`verifyBearer` は署名検証と claims 抽出しかせず、境界ルールで `contexts/` を
+参照できない。**記事の推奨は既に満たしている。**
+
+数えたところ、出ていくのは 170 行中 12 行（7%）。引き換えに払うものが 3 つある。
+
+1. **型付き claims が消える。** いまは `auth: true` を書いた経路にだけ
+   `auth: AccessTokenClaims` が現れ、書いていない controller では型に存在しない。
+   middleware にすると `c.get("claims")` になり、全経路で参照可能かつ
+   `undefined` かもしれない値になる。**これを諦めない限りファイルは縮まない** —
+   宣言を残すなら条件型も残り、動く場所が変わるだけ。
+2. **401 が相関 ID と契約の形を失う。** middleware は handler の前なので
+   `resolveRequestId` も `handleFailures` も走っていない。401 の本文を
+   自前で組み立て直すことになり、エラー翻訳が 2 箇所になる。
+3. **400 と 401 の順序が黙って逆転する。** いま認証はわざと最後に見ている
+   （契約違反のほうが先に分かるほうが直しやすい）。middleware は前に走る。
+
+**着手の引き金は 3 を「反転させたい」と判断したとき。** 「認証されていない相手に
+検証の詳細を返さない」を優先するなら 401 が先で正しく、そのときは相関 ID と
+ログごと middleware 層へ降ろす**まとめての再設計**になる。中途半端にやると 2 を踏む。
+
+あわせて [`handleWithEffect` の型の複雑さ](#handlewitheffect-の型の複雑さ) も見る。
+
+### 2. Effect-TS の書き方の全体見直し
+
+一通り動くようになったので、**書き方の癖を揃える**。見る観点:
+
+- `Effect.gen` と `pipe` の使い分け（いまは層ごとに揺れている）
+- `Effect.orDie` を使ってよい境界（「DB の値は信用する」以外に広げていないか）
+- `Effect.all` の `concurrency` 指定漏れ（既定は逐次）
+- エラーチャネル `E` の粒度 — 型付きエラーと defect の線引き
+- `Layer` の粒度と、`Context.GenericTag` / `Context.Tag` の使い分け
+
+### 3. 単体テストの追加
+
+現状は**単体 8 / API 37**で、単体は `classifyRefreshToken` の 1 本しかない。
+筆頭は [`classifyDbFailure` の 7 分類](#まだ埋まっていない穴) — 純粋な関数なので、
+偽の例外を渡すだけで全部覆える。実 DB でしか踏めない 2 つとは事情が違う。
+
+カバレッジ閾値（`coverageThreshold`）もここで入れる。いま入れないのは、bun が
+**一度も import されなかったファイルを表に載せない**ため、未テストのモジュールが
+0% ではなく「存在しない」ことになり、分母が安定していないから。
+
+### 4. oxlint の規約の見直し
+
+いま `error` にしているのは `correctness` だけで、`suspicious` / `pedantic` /
+`style` / `perf` は未設定。**まず `warn` で入れて件数を見る**のが安全。
+
+追加・変更したら [わざと違反するファイルを作って確認する](03-boundary-enforcement.md#落とし穴)。
+検出されることと、**許可すべきものが通ること**の両方を見る。
+
+### 5. Claude が読めるコード規約の作成
+
+`CLAUDE.md` にあるのは運用（コミット / 検証 / ドキュメント）だけで、**コードの書き方**は
+`docs/02-architecture.md` に散っている。docs は人間向けに「なぜ」を長く書いてあるので、
+毎回読ませるには重い。
+
+決めるのは線引き — **機械的に従える規則**（命名、ファイル分割、import の向き、
+コメントの書き方）を短い形で `CLAUDE.md` 側に置き、その理由は docs に残してリンクする。
+lint で強制できるものは規約に書かず lint に寄せる、という判断も含む。
+
+---
+
 ## テスト着手時に固定すべきこと
 
-現在のテストは HTTP 境界の統合テストのみ（`src/__tests__/app.test.ts`, 19 ケース）。
-**形が固まってからまとめて書く**方針。実際この判断は正しく機能していて、
-プレゼンテーション層を 13 段階作り替えた際、HTTP 境界のテストは 1 行も変えずに通り続けた
-（安定した縫い目にだけテストを置いているため）。
+現在は**単体 8 / API 37**（規約は [`02-architecture.md`](02-architecture.md#テストは-2-種類に分け対象の隣に置く)）。
+長らく HTTP 境界の統合テストだけで進め、**形が固まってからまとめて書く**方針を採った。
+この判断は正しく機能していて、プレゼンテーション層を 13 段階作り替えても、
+`Database` を Layer 化しても、`shared/db` を丸ごと移動しても、
+HTTP 境界のテストは 1 行も変えずに通り続けた（安定した縫い目にだけ置いているため）。
 
 ### すでに固定されている繊細な挙動
 
@@ -29,6 +163,10 @@
 | `changePasswordCommand`       | 401 のときは永続化が走らない                       | 照合に失敗してもパスワードが変わる         |
 | `changeUserPassword`          | 変わるのは hashedPassword と updatedAt だけ        | 名前・メールアドレス・作成日時が巻き戻る   |
 | `handleWithEffect`            | defect でも契約どおりの 500 と相関 ID を返す       | 平文 500 が返り、ログも残らない            |
+| `classifyRefreshToken`        | 猶予期間の境界 30 秒ちょうどは内側                 | 並行更新したタブが盗難扱いされる           |
+| `classifyRefreshToken`        | 理由が `rotated` 以外なら猶予を与えない            | 切ったセッションが 30 秒間生き返る         |
+| `refreshCommand`              | 再利用のみセッションを切り、失効済みは切り直さない | 盗難検出の直後にセッションが復活する       |
+| `loginCommand`                | 保存するのはハッシュだけ / `sid` はセッション      | 平文の券が DB に残る、ログアウトが効かない |
 
 ### まだ埋まっていない穴
 
@@ -40,6 +178,7 @@
 | `UserRepositoryLive` の `set` 句 | 各更新が「その遷移の列」だけを書くこと           | 列をまたぐロストアップデートが復活する    |
 | `handleMailAddressDuplication`   | 制約名が実物と一致すること（実測済み・未自動化） | 制約名が変わると 409 が黙って 500 になる  |
 | `classifyDbFailure` の対応表     | 7 つの内訳のうち 2 つしか実測していない          | ログの内訳が嘘になる（応答は 500 のまま） |
+| **認可**                         | `claims.sub` と対象 id の突き合わせが**無い**    | 他人のリソースを取得・更新・削除できる    |
 
 `set` 句は偽のリポジトリでは覆えない（テストが見ているのはポートの呼び分けまで）。
 実 DB でレースを起こして確認したが、その手順は自動化していない。
@@ -81,7 +220,7 @@ HTTP 境界のみという方針なので、単体テストを足すかどうか
 
 ### テストの限界（意図的に受け入れているもの）
 
-`app.test.ts` はステータスと errorCode を `HttpStatus` / `ErrorCode` から参照している。
+API テストはステータスと errorCode を `HttpStatus` / `ErrorCode` から参照している。
 可読性を優先した判断だが、**定数の値そのものが変わったケースは検出できない**
 （実装とテストが同じ定数を見るため）。契約（TypeSpec）と実装のステータス一致を
 機械的に照合する仕組みは今のところ無い。
@@ -90,17 +229,11 @@ HTTP 境界のみという方針なので、単体テストを足すかどうか
 
 ## 実装の積み残し
 
-### `auth` コンテキスト（契約は定義済み）
-
-`login` / `logout` / `refresh`。**初のコンテキスト跨ぎ**になるので、
-`no-cross-context-internals` などの境界ルールがここで初めて実戦投入される。
-
-> ⚠️ **着手前に思い出すこと**: `GetUserQueryService` はログインに使えない。
-> 返すのは `name` / `mailAddress` だけで、**`id` も `hashedPassword` も含まない**
-> （`GET /users/{id}` のための射影として意図的にそぎ落とした）。
-> ログインは「メールアドレスで引く」「ハッシュを照合する」「id をトークンに載せる」の
-> 3 つが必要なので、user 側に別のポートを用意する話になる。
-> Customer/Supplier（使う側の要求を供給側が受けて公開する）の初適用。
+> `auth` コンテキスト（`login` / `logout` / `refresh`）は実装済み。
+> 予告どおり `GetUserQueryService` はログインに使えず（`id` も `hashedPassword` も
+> 含まない射影のため）、user 側に `VerifyCredentialsQueryService` を用意する形になった。
+> Customer/Supplier の初適用。経緯は [`05-auth/01-our-approach.md`](05-auth/01-our-approach.md)。
+> **残っているのは認可**（上記「次にやること」）。
 
 ### `listUsers`（契約が未定義）
 
@@ -189,7 +322,10 @@ Query Service 側と重なっているのは `Option.fromNullable(rows[0])` の 
 `ConflictError` / `InternalServerError` は一度も `new` されていない。
 `ConflictError` は汎用 409 として出番がありうる。
 `InternalServerError` は 500 を `RepositoryError` の翻訳経由で出しているため、
-**直接 new する場面が無い可能性が高い**（auth 実装後も使われなければ削除を検討する）。
+**直接 new する場面が無い可能性が高い**。
+
+**auth を実装しても両方とも 0 件のままだった**ので、判断の時期は来ている。
+削除するか、認可（403）で `ConflictError` 相当が要るかを見てから決める。
 
 `UnauthorizedError` は `changePassword` で使い始めた。その際、`ResourceNotFoundError` に
 倣って `message` フィールドを落としている（文言を決めるのは presentation の責務。
@@ -219,6 +355,14 @@ Query Service 側と重なっているのは `Option.fromNullable(rows[0])` の 
 
 マップ型・判別可能ユニオン・型述語を組み合わせており、後から触りにくい部類のコード。
 ただしこれは**絶対的に必要な複雑さではなく、呼び出し側の簡潔さと引き換えに買ったもの**。
+
+> 2026-08-09 に **265 行 → 168 行**（コード 170 → 105 行）へ落とした。中身を削ったのではなく、
+> 置き場を直しただけ。`RequestSchemas` / `ValidatedRequest` / `ControllerInput` と
+> `validateRequest` は [`request-validator.ts`](../src/shared/presentation/request-validator.ts) へ、
+> 失敗と defect の受け皿は [`handle-failures.ts`](../src/shared/presentation/handle-failures.ts) へ移した。
+> 後者を `handle-error-response.ts` に置かなかったのは、`request-log.ts` が
+> そちらの `ApplicationError` を参照しており**循環になる**ため。
+> 残った `handleWithEffect` は組み立てだけを持つ。
 
 重荷になった場合の逃げ道: `request` の 4 入力源を必ず全部書かせ、使わないものは
 `undefined` を渡す形にすれば、キーの絞り込み（`as K : never`）が不要になる。
