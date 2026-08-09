@@ -148,6 +148,26 @@ export default {
     // no-indirect-path-to-impl) が同じことを覆うため削除した。
     // 消す前に、わざと違反するファイルで「今も検出されること」を確認済み。
     {
+      name: "handler-internals-are-private",
+      severity: "error",
+      comment: message({
+        violation:
+          "shared/presentation/handler/ を、shared/presentation の外から参照しています。",
+        reason:
+          "あそこは handleWithEffect が組み立てる部品置き場で、外に見せる面ではありません。\n" +
+          "直接掴まれると、パイプラインの段を並べ替えるだけで利用側が壊れます。\n" +
+          "実際 controller が validate* を直接呼ぶと、同じ検証が二度走ります。",
+        fix:
+          "shared/presentation 直下の公開面を使います。\n" +
+          "  routes     → handle-with-effect.ts\n" +
+          "  controller → decode-input.ts\n" +
+          "  app.ts     → resolve-request-id.ts / handle-not-found.ts\n" +
+          "必要なものが無ければ、直下に窓口を足してから使います。",
+      }),
+      from: { pathNot: "^src/shared/presentation/" },
+      to: { path: "^src/shared/presentation/handler/" },
+    },
+    {
       name: "generated-only-from-presentation",
       severity: "error",
       comment: message({

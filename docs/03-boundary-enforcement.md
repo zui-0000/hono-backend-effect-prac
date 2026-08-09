@@ -64,6 +64,20 @@ oxlint は import 文の文字列しか見ないため、相対パスと `~/` �
 
 ---
 
+### 層の中の「部品置き場」も閉じる
+
+`shared/presentation/handler/` は `handleWithEffect` が組み立てる部品で、
+**`shared/presentation` の外からは参照できない**（`handler-internals-are-private`）。
+
+層をまたぐ規約ではないが、塞ぐ理由は同じ。直接掴まれると
+「パイプラインの段を並べ替える」だけで利用側が壊れるし、controller が
+`validate*` を直接呼べば**同じ検証が二度走る**。公開面は直下の 4 ファイルだけ。
+
+oxlint 側は 2 箇所に書いている（トップレベルの `rules` と
+`src/contexts/*/presentation/**` の override）。**後勝ちで丸ごと置き換わる**ため、
+override に当たるファイルはトップレベルの宣言が効かないから
+（下の「落とし穴」参照）。
+
 ## コンテキスト跨ぎ — dependency-cruiser にしか書けないルール
 
 「`contexts/X` は `contexts/Y`（X≠Y）の内部層を import しない」には**後方参照**が要る。

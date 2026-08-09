@@ -25,6 +25,13 @@
             "group": ["~/generated/**", "**/generated/**"],
             "message": "生成スキーマ (API 契約) を使ってよいのは presentation 層だけです。契約の型が内側へ漏れると、契約を変えるたびにドメインまで書き換えが波及します。",
           },
+          {
+            "group": [
+              "~/shared/presentation/handler/**",
+              "**/shared/presentation/handler/**",
+            ],
+            "message": "shared/presentation/handler は handleWithEffect の部品置き場です。直下の公開面 (handle-with-effect / decode-input / resolve-request-id / handle-not-found) を使ってください。",
+          },
         ],
       },
     ],
@@ -136,6 +143,13 @@
                   "**/shared/db/**",
                 ],
                 "message": "controller は実装や DB を直接掴みません。application の command / query を呼び、実装の結線は src/app-runtime.ts に任せます。",
+              },
+              {
+                "group": [
+                  "~/shared/presentation/handler/**",
+                  "**/shared/presentation/handler/**",
+                ],
+                "message": "shared/presentation/handler は handleWithEffect の部品置き場です。直下の公開面 (handle-with-effect / decode-input / resolve-request-id / handle-not-found) を使ってください。",
               },
             ],
           },
