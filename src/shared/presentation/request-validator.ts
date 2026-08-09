@@ -2,10 +2,17 @@ import { Effect, ParseResult, Schema } from "effect";
 import type { ParseError } from "effect/ParseResult";
 import type { Context } from "hono";
 
+import type {
+  AccessTokenClaims,
+  AccessTokenIssuer,
+} from "~/shared/domain/access-token-issuer";
 import { BadRequestError } from "~/shared/errors/bad-request-error";
 import type { ErrorDetail } from "~/shared/errors/error-detail";
 
 import { ErrorMessage } from "./constants/error-message";
+import { HttpHeader } from "./constants/http-header";
+import type { ApplicationError } from "./handle-error-response";
+import { verifyBearer } from "./verify-bearer";
 
 /**
  * リクエストの検証ユーティリティ。
@@ -13,15 +20,16 @@ import { ErrorMessage } from "./constants/error-message";
  * 「入力源ごとの検証」と「ユースケース入力の組み立て」を分けている。
  * **呼ぶ側が違う**ので、そこを取り違えないこと。
  *
- * 入力源ごとの検証 — 呼ぶのは handleWithEffect だけ (controller からは呼ばない):
+ * 入力源ごとの検証 — 呼ぶのは validateRequest だけ (controller からは呼ばない):
  *   - validateJson   … ボディ             `c.req.json()`
  *   - validateHeader … ヘッダ             `c.req.header()`
  *   - validateParams … パスパラメータ     `c.req.param()`   例: /users/:id の :id
  *   - validateQuery  … クエリパラメータ   `c.req.query()`   例: /users?page=2
  *
- * どれを検証するかは routes の `request` 宣言が決め、handleWithEffect が
- * 実行して controller に渡す。controller が受け取るのは検証済みの値なので、
- * ここで再度呼ぶと同じ検証を二度走らせることになる。
+ * どれを検証するかは routes の `request` 宣言 (`RequestSchemas`) が決め、
+ * validateRequest が実行して controller に渡す形に組み立てる。
+ * controller が受け取るのは検証済みの値なので、ここで再度呼ぶと
+ * 同じ検証を二度走らせることになる。
  *
  * ユースケース入力の組み立て — 呼ぶのは controller:
  *   - decodeInput    … 検証済みの値を合成し、値オブジェクトへ変換する
@@ -134,3 +142,82 @@ export const decodeInput = <A, I>(
   schema: Schema.Schema<A, I>,
   source: unknown,
 ): Effect.Effect<A, BadRequestError> => decode(schema, source);
+
+/**
+ * リクエストのどの入力源を契約で検証するかの宣言。
+ *
+ * header は必須。全エンドポイントが相関 ID (X-Request-Id) を要求するため。
+ * それ以外はエンドポイントごとに要否が変わるので任意。
+ * 指定したものだけが controller に渡る (指定しなかった入力源は型に現れない)。
+ */
+export type RequestSchemas = {
+  readonly header: Schema.Schema.AnyNoContext;
+  readonly body?: Schema.Schema.AnyNoContext;
+  readonly params?: Schema.Schema.AnyNoContext;
+  readonly query?: Schema.Schema.AnyNoContext;
+  /**
+   * 認証を要求するか。契約の `@useAuth(BearerAuth)` と対になる。
+   *
+   * 他の入力源と違ってスキーマではなく true を書くのは、検証の相手が
+   * リクエストの一部ではなく**署名そのもの**だから。宣言すると
+   * controller の入力に検証済みの claims (`auth`) が載る。
+   */
+  readonly auth?: true;
+};
+
+/**
+ * 宣言した入力源に対応する、検証済みの値の形。
+ * `{ header, body }` を宣言すれば `{ header, body }` が導かれる。
+ * 宣言していない入力源は型に現れないので、controller で誤って使うと
+ * コンパイルエラーになる。
+ */
+type ValidatedRequest<Req extends RequestSchemas> = {
+  readonly [K in keyof Req as Req[K] extends Schema.Schema.AnyNoContext
+    ? K
+    : never]: Req[K] extends Schema.Schema<infer A, infer _I, never>
+    ? A
+    : never;
+} & (true extends Req["auth"]
+  ? { readonly auth: AccessTokenClaims }
+  : Record<never, never>);
+
+/** controller が受け取る引数。検証済みの入力に加え、生の Context も渡す。 */
+export type ControllerInput<Req extends RequestSchemas> =
+  ValidatedRequest<Req> & {
+    readonly c: Context;
+  };
+
+/**
+ * 宣言された入力源を検証し、controller に渡す形に組み立てる。
+ *
+ * ヘッダを最初に見るのは、相関 ID が全リクエスト必須だから (まずそこで弾く)。
+ * **認証は最後**に見る。契約違反 (400) のほうが先に分かるほうが直しやすく、
+ * かつ「認証を通さないと入力の不備が分からない」状態を避けられる
+ * (この順序を変えるなら、認証を Hono の middleware へ降ろす話になる。
+ * 判断は docs/04-backlog.md に置いてある)。
+ */
+export const validateRequest = <Req extends RequestSchemas>(
+  c: Context,
+  request: Req,
+): Effect.Effect<ControllerInput<Req>, ApplicationError, AccessTokenIssuer> =>
+  Effect.gen(function* () {
+    const validated: Record<string, unknown> = { c };
+
+    validated["header"] = yield* validateHeader(c, request.header, [
+      HttpHeader.RequestId,
+    ]);
+    if (request.body !== undefined) {
+      validated["body"] = yield* validateJson(c, request.body);
+    }
+    if (request.params !== undefined) {
+      validated["params"] = yield* validateParams(c, request.params);
+    }
+    if (request.query !== undefined) {
+      validated["query"] = yield* validateQuery(c, request.query);
+    }
+    if (request.auth === true) {
+      validated["auth"] = yield* verifyBearer(c);
+    }
+
+    return validated as ControllerInput<Req>;
+  });

@@ -147,11 +147,16 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 
 **各層には「失敗をその層の語彙へ直す窓口」がある。** 名前を揃えて、構造が読めるようにする。
 
-| 名前                           | 層             | 何を何に直すか                                 |
-| ------------------------------ | -------------- | ---------------------------------------------- |
-| `handleDbFailure`              | infrastructure | DB 例外 → `RepositoryError`                    |
-| `handleMailAddressDuplication` | infrastructure | 一意制約違反 → `MailAddressAlreadyExistsError` |
-| `handleErrorResponse`          | presentation   | `ApplicationError` → HTTP 応答                 |
+| 名前                           | 層             | 何を何に直すか                                  |
+| ------------------------------ | -------------- | ----------------------------------------------- |
+| `handleDbFailure`              | infrastructure | DB 例外 → `RepositoryError`                     |
+| `handleMailAddressDuplication` | infrastructure | 一意制約違反 → `MailAddressAlreadyExistsError`  |
+| `handleErrorResponse`          | presentation   | `ApplicationError` → HTTP 応答（純粋な表）      |
+| `handleFailures`               | presentation   | Effect の失敗経路 → 応答（pipeable。defect も） |
+
+`handleErrorResponse` と `handleFailures` は**形が違う**。前者はエラー 1 つを応答へ写す
+純粋な関数で、後者は Effect の失敗と defect をまとめて応答へ畳む pipeable
+（`handleDbFailure` と同じ立ち位置）。名詞が違うので取り違えようがない。
 
 `handleDbFailure` は当初 `dbQuery` という名前で、Promise を作る関数を受け取るラッパだった。
 **名前が引数を説明していて、自分の仕事を説明していなかった**ため改めた。
@@ -196,6 +201,11 @@ application も presentation も影響を受けない。
 
 `handleWithEffect` だけは `handle` + **どうやって**で、Hono のハンドラを組み立てる側。
 形が違うが、そもそも別種のものなので揃えない。
+
+そのハンドラの中身も、いまは**組み立てだけ**が残っている。入力の検証と
+controller への組み立ては `request-validator.ts`、失敗と defect の受け皿は
+`handle-failures.ts` が持つ（経緯は
+[`04-backlog.md`](04-backlog.md#handlewitheffect-の型の複雑さ)）。
 
 > `validate*` を presentation に予約したのとは扱いが違う。あちらは同じ語が層をまたぐと
 > 別の意味になってしまうので分けた。`handle` は**どの層でも「失敗をその層の言葉に直す」**で
