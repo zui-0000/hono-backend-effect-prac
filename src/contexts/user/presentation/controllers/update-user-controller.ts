@@ -5,7 +5,7 @@ import {
   UpdateUserCommandInput,
 } from "~/contexts/user/application/update-user-command";
 import type { UpdateUserBody, UpdateUserParams } from "~/generated/users";
-import { decodeInput } from "~/shared/presentation/request-validator";
+import { decodeInput } from "~/shared/presentation/decode-input";
 
 type UpdateUserControllerInput = {
   body: typeof UpdateUserBody.Type;

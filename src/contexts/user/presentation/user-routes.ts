@@ -18,7 +18,7 @@ import {
 } from "~/generated/users";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
 import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
-import type { RequestContextEnv } from "~/shared/presentation/request-context";
+import type { RequestIdEnv } from "~/shared/presentation/resolve-request-id";
 
 import type { UserRuntime } from "../user-runtime";
 import { changePasswordController } from "./controllers/change-password-controller";
@@ -42,8 +42,8 @@ import { updateUserController } from "./controllers/update-user-controller";
  * 認証不要で、残る 4 本は Bearer を要求する。宣言すると handleWithEffect が署名を検証し、
  * controller の入力に claims が載る。
  */
-export const userRoutes = (runtime: UserRuntime): Hono<RequestContextEnv> => {
-  const routes = new Hono<RequestContextEnv>();
+export const userRoutes = (runtime: UserRuntime): Hono<RequestIdEnv> => {
+  const routes = new Hono<RequestIdEnv>();
 
   routes.post(
     "/",
@@ -57,7 +57,8 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestContextEnv> => {
   routes.get(
     "/:id",
     handleWithEffect({
-      request: { header: GetUserHeader, params: GetUserParams, auth: true },
+      auth: true,
+      request: { header: GetUserHeader, params: GetUserParams },
       response: { status: HttpStatus.Ok, body: GetUser200Response },
       controller: getUserController,
     })(runtime),
@@ -66,11 +67,11 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestContextEnv> => {
   routes.put(
     "/:id",
     handleWithEffect({
+      auth: true,
       request: {
         header: UpdateUserHeader,
         body: UpdateUserBody,
         params: UpdateUserParams,
-        auth: true,
       },
       response: { status: HttpStatus.NoContent },
       controller: updateUserController,
@@ -80,11 +81,11 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestContextEnv> => {
   routes.put(
     "/:id/password",
     handleWithEffect({
+      auth: true,
       request: {
         header: ChangePasswordHeader,
         body: ChangePasswordBody,
         params: ChangePasswordParams,
-        auth: true,
       },
       response: { status: HttpStatus.NoContent },
       controller: changePasswordController,
@@ -94,10 +95,10 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestContextEnv> => {
   routes.delete(
     "/:id",
     handleWithEffect({
+      auth: true,
       request: {
         header: DeleteUserHeader,
         params: DeleteUserParams,
-        auth: true,
       },
       response: { status: HttpStatus.NoContent },
       controller: deleteUserController,

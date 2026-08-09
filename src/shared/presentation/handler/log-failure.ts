@@ -1,49 +1,16 @@
 import { Cause, Effect } from "effect";
 import type { Context } from "hono";
 
-import { UuidGenerator } from "~/shared/domain/uuid-generator";
-
-import { HttpHeader } from "./constants/http-header";
-import { HttpStatus } from "./constants/http-status";
+import { HttpStatus } from "../constants/http-status";
 import type { ApplicationError } from "./handle-error-response";
 
 /**
- * 以下 2 つはヘッダ名ではなく「ログに載せて安全か」の判定基準なので、
- * constants/ ではなく唯一の利用者である resolveRequestId の隣に置く。
- * 契約が要求する形式 (uuid) とは別物で、契約の検証は validateHeader が行う。
- */
-
-/** 受け取った相関 ID として許容する最大長 (ログ肥大化を防ぐ)。 */
-const REQUEST_ID_MAX_LENGTH = 128;
-
-/** ログに混入させない文字を除いた、安全な相関 ID の形式。 */
-const SAFE_REQUEST_ID_PATTERN = /^[\w.-]+$/;
-
-/**
- * ログと応答ヘッダに載せる相関 ID を解決する。
+ * 失敗をサーバーログに残す。**外に返さないことを、ここで補う。**
  *
- * X-Request-Id は API 契約上は必須で、その検証は validateHeader が行う
- * (欠落・形式不正は 400)。一方この関数は「検証で弾かれたリクエストも
- * ログに残す」ために使うので、契約違反でも失敗させず採番で代替する。
- *
- * 外部由来の値はそのままログに載せるとログインジェクションの恐れがあるため、
- * 長さと文字種を検証し、条件を満たさないものは採番した値で置き換える。
+ * 応答はエラーコードと定型メッセージだけなので、原因を辿る手掛かりは
+ * ログにしかない。相関 ID を応答ヘッダと共有することで、
+ * 特定の問い合わせからログを引ける。
  */
-export const resolveRequestId = (
-  c: Context,
-): Effect.Effect<string, never, UuidGenerator> =>
-  Effect.gen(function* () {
-    const incoming = c.req.header(HttpHeader.RequestId);
-    if (
-      incoming !== undefined &&
-      incoming.length <= REQUEST_ID_MAX_LENGTH &&
-      SAFE_REQUEST_ID_PATTERN.test(incoming)
-    ) {
-      return incoming;
-    }
-    const uuidGenerator = yield* UuidGenerator;
-    return yield* uuidGenerator.next;
-  });
 
 /**
  * インフラ由来の失敗だけが持つ情報 (原因と内訳)。いずれも外部には出さない。

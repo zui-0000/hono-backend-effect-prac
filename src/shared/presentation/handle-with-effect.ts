@@ -6,14 +6,15 @@ import type { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
 
 import { HttpStatus } from "./constants/http-status";
-import type { ApplicationError } from "./handle-error-response";
-import { handleFailures } from "./handle-failures";
-import type { RequestContextEnv } from "./request-context";
+import type { ApplicationError } from "./handler/handle-error-response";
+import { handleFailures } from "./handler/handle-failures";
 import {
   type ControllerInput,
   type RequestSchemas,
   validateRequest,
-} from "./request-validator";
+} from "./handler/validate-request";
+import { verifyAuth } from "./handler/verify-bearer";
+import type { RequestIdEnv } from "./resolve-request-id";
 
 /**
  * 本文を返さない応答 (204 No Content)。
@@ -33,40 +34,71 @@ type ContentfulResponse<ResponseA, ResponseI> = {
   readonly body: Schema.Schema<ResponseA, ResponseI>;
 };
 
-type NoContentSpec<Req extends RequestSchemas, R> = {
+/**
+ * エンドポイントの宣言。**キーが実行の段と 1 対 1 で対応する。**
+ *
+ *   auth       → verifyAuth        （省くと認証しない）
+ *   request    → validateRequest
+ *   controller → controller
+ *   response   → respond
+ *
+ * `auth` を `request` の中に入れないのは、あちらが「入力源 → スキーマ」の表で、
+ * 認証だけスキーマを持たないため。混ぜると値の型が揃わない。
+ * 契約の `@useAuth(BearerAuth)` と 1 対 1。
+ */
+type CommonSpec<Req extends RequestSchemas, Auth extends true | undefined> = {
+  readonly auth?: Auth;
   readonly request: Req;
+};
+
+type NoContentSpec<
+  Req extends RequestSchemas,
+  Auth extends true | undefined,
+  R,
+> = CommonSpec<Req, Auth> & {
   readonly response: NoContentResponse;
   readonly controller: (
-    input: ControllerInput<Req>,
+    input: ControllerInput<Req, Auth>,
   ) => Effect.Effect<void, ApplicationError, R>;
 };
 
-type ContentfulSpec<A, ResponseA, ResponseI, Req extends RequestSchemas, R> = {
-  readonly request: Req;
+type ContentfulSpec<
+  A,
+  ResponseA,
+  ResponseI,
+  Req extends RequestSchemas,
+  Auth extends true | undefined,
+  R,
+> = CommonSpec<Req, Auth> & {
   readonly response: ContentfulResponse<ResponseA, ResponseI>;
   readonly controller: (
-    input: ControllerInput<Req>,
+    input: ControllerInput<Req, Auth>,
   ) => Effect.Effect<A, ApplicationError, R>;
 };
 
 /**
  * 共通の実行部。成功時の応答の作り方 (respond) だけを呼び出し側から受け取る。
  *
- * 実行の流れ:
- *   1. リクエストを API 契約で検証する (validateRequest)
- *   2. controller を実行する
- *   3. 結果を HTTP 応答に変換する (respond)
- *   4. 失敗と defect を応答へ畳む (handleFailures)
+ * 実行の流れ。**責務ごとに 1 段ずつ並べてある。**
+ *   1. 認証する            (verifyAuth。宣言が無い経路では何もしない)
+ *   2. 契約で検証する      (validateRequest)
+ *   3. controller を実行する
+ *   4. HTTP 応答に変換する (respond)
+ *   5. 失敗と defect を畳む (handleFailures が全体を包む)
+ *
+ * **認証が先。** 通っていない相手には契約の話を一切しない
+ * (400 の details はフィールド名と制約をそのまま返すため)。
  *
  * 相関 ID は**採番しない**。`requestContext` middleware が全リクエストで確定させた
  * ものを読むだけ。2 箇所で採番すると、受け取った値が使えないときに
  * 応答ヘッダとログへ別々の ID が載る。
  */
 const handle =
-  <A, Req extends RequestSchemas, R>(
+  <A, Req extends RequestSchemas, Auth extends true | undefined, R>(
+    auth: Auth | undefined,
     request: Req,
     controller: (
-      input: ControllerInput<Req>,
+      input: ControllerInput<Req, Auth>,
     ) => Effect.Effect<A, ApplicationError, R>,
     respond: (c: Context, value: A) => Effect.Effect<Response>,
   ) =>
@@ -75,18 +107,20 @@ const handle =
       R | UuidGenerator | AccessTokenIssuer,
       never
     >,
-  ): Handler<RequestContextEnv> =>
+  ): Handler<RequestIdEnv> =>
   async (c) =>
     await runtime.runPromise(
       Effect.gen(function* () {
-        const requestId = c.get("requestId");
+        const authenticated = yield* verifyAuth(c, auth);
+        const validated = yield* validateRequest(c, request);
+        const value = yield* controller({
+          ...validated,
+          ...authenticated,
+          c,
+        } as ControllerInput<Req, Auth>);
 
-        return yield* validateRequest(c, request).pipe(
-          Effect.flatMap(controller),
-          Effect.flatMap((value) => respond(c, value)),
-          handleFailures(c, requestId),
-        );
-      }),
+        return yield* respond(c, value);
+      }).pipe(handleFailures(c, c.get("requestId"))),
     );
 
 /**
@@ -96,17 +130,28 @@ const handle =
  * controller の型 (void を返す版 / 値を返す版) が union のまま残ってしまう。
  * spec ごと絞るために型述語にしている。
  */
-const isContentful = <A, ResponseA, ResponseI, Req extends RequestSchemas, R>(
-  spec: NoContentSpec<Req, R> | ContentfulSpec<A, ResponseA, ResponseI, Req, R>,
-): spec is ContentfulSpec<A, ResponseA, ResponseI, Req, R> =>
+const isContentful = <
+  A,
+  ResponseA,
+  ResponseI,
+  Req extends RequestSchemas,
+  Auth extends true | undefined,
+  R,
+>(
+  spec:
+    | NoContentSpec<Req, Auth, R>
+    | ContentfulSpec<A, ResponseA, ResponseI, Req, Auth, R>,
+): spec is ContentfulSpec<A, ResponseA, ResponseI, Req, Auth, R> =>
   "body" in spec.response;
 
 /**
  * ユースケースの Effect から HTTP ハンドラを組み立てる。
  *
- * 宣言は request / response / controller の 3 つ。**HTTP 契約の入出力が
+ * 宣言は auth / request / response / controller の 4 つで、**実行の段と 1 対 1**。**HTTP 契約の入出力が
  * そのまま読める形**にしてある。
  *
+ * - **auth** … `true` なら Bearer を検証し、claims を controller の入力に載せる
+ *   （省略した経路では `auth` が型に現れない）
  * - **request** … 検証する入力源（`RequestSchemas`）。宣言したものだけが
  *   検証され、controller に渡る
  * - **response** … `status: HttpStatus.NoContent` なら本文なし (body を受け付けない)、
@@ -141,17 +186,20 @@ export const handleWithEffect = <
   ResponseI,
   Req extends RequestSchemas,
   R,
+  Auth extends true | undefined = undefined,
 >(
-  spec: NoContentSpec<Req, R> | ContentfulSpec<A, ResponseA, ResponseI, Req, R>,
+  spec:
+    | NoContentSpec<Req, Auth, R>
+    | ContentfulSpec<A, ResponseA, ResponseI, Req, Auth, R>,
 ): ((
   runtime: ManagedRuntime.ManagedRuntime<
     R | UuidGenerator | AccessTokenIssuer,
     never
   >,
-) => Handler<RequestContextEnv>) => {
+) => Handler<RequestIdEnv>) => {
   if (isContentful(spec)) {
     const { status, body: bodySchema } = spec.response;
-    return handle(spec.request, spec.controller, (c, value) =>
+    return handle(spec.auth, spec.request, spec.controller, (c, value) =>
       Schema.decodeUnknown(bodySchema)(value).pipe(
         Effect.orDie,
         Effect.map((decoded) => c.json(decoded as object, status)),
@@ -160,7 +208,7 @@ export const handleWithEffect = <
   }
 
   const { status } = spec.response;
-  return handle(spec.request, spec.controller, (c) =>
+  return handle(spec.auth, spec.request, spec.controller, (c) =>
     Effect.succeed(c.body(null, status)),
   );
 };

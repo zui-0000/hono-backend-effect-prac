@@ -2,7 +2,7 @@ import { Effect } from "effect";
 
 import { refreshCommand } from "~/contexts/auth/application/refresh-command";
 import type { RefreshBody } from "~/generated/auth";
-import { decodeInput } from "~/shared/presentation/request-validator";
+import { decodeInput } from "~/shared/presentation/decode-input";
 
 import { RefreshCommandInput } from "../../application/refresh-command";
 

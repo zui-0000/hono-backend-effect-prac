@@ -7,7 +7,7 @@ import {
 } from "~/shared/domain/access-token-issuer";
 import { UnauthorizedError } from "~/shared/errors/unauthorized-error";
 
-import { HttpHeader } from "./constants/http-header";
+import { HttpHeader } from "../constants/http-header";
 
 /** `Authorization: Bearer <token>` から券だけを取り出す。 */
 const BEARER_PATTERN = /^Bearer (.+)$/;
@@ -28,6 +28,39 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
  * 期限切れを書き分けない (攻撃側に手掛かりを与えないため)。
  * 401 は契約でも宣言済みなので、応答の形は変わらない。
  */
+/**
+ * `auth: true` を宣言した経路にだけ現れる、検証済みの claims。
+ *
+ * 宣言していない経路では `Record<never, never>` になるので、
+ * controller が `auth` を触るとコンパイルエラーになる。
+ */
+export type AuthenticatedInput<Required> = true extends Required
+  ? { readonly auth: AccessTokenClaims }
+  : Record<never, never>;
+
+/**
+ * 経路の宣言に応じて認証を行う段。**要らない経路では何もしない。**
+ *
+ * `verifyBearer` との違いは、**要否の判断を持つかどうか**。あちらは
+ * 「Bearer を検証する」だけで、要否は知らない。
+ *
+ * 契約検証より**前**に呼ぶ。認証を通っていない相手には契約の話を一切しない
+ * (詳細は validateRequest の doc)。
+ */
+export const verifyAuth = <Required extends true | undefined>(
+  c: Context,
+  required: Required,
+): Effect.Effect<
+  AuthenticatedInput<Required>,
+  UnauthorizedError,
+  AccessTokenIssuer
+> =>
+  required === true
+    ? verifyBearer(c).pipe(
+        Effect.map((auth) => ({ auth }) as AuthenticatedInput<Required>),
+      )
+    : Effect.succeed({} as AuthenticatedInput<Required>);
+
 export const verifyBearer = (
   c: Context,
 ): Effect.Effect<AccessTokenClaims, UnauthorizedError, AccessTokenIssuer> =>

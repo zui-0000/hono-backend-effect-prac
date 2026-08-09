@@ -89,15 +89,18 @@ GetUserQueryOutput = { name, mailAddress };
 2. **401 が相関 ID と契約の形を失う。** middleware は handler の前なので
    `resolveRequestId` も `handleFailures` も走っていない。401 の本文を
    自前で組み立て直すことになり、エラー翻訳が 2 箇所になる。
-3. **400 と 401 の順序が黙って逆転する。** いま認証はわざと最後に見ている
-   （契約違反のほうが先に分かるほうが直しやすい）。middleware は前に走る。
+3. ~~**400 と 401 の順序が黙って逆転する。**~~ **2026-08-09 に解消。**
+   「認証を通っていない相手には契約の話を一切しない」を優先し、
+   `validateRequest` の中で認証を先頭へ移した。middleware に出しても
+   順序は変わらなくなったので、これはもうコストではない。
 
-**着手の引き金は 3 を「反転させたい」と判断したとき。** 「認証されていない相手に
-検証の詳細を返さない」を優先するなら 401 が先で正しく、そのときは相関 ID と
-ログごと middleware 層へ降ろす**まとめての再設計**になる。中途半端にやると 2 を踏む。
+**残るコストは 2 と、「1 リクエスト = 1 Effect」が壊れること。**
+着手の引き金は、認証より前に走らせたい横断的な処理（レート制限など）が
+出てきたとき。そのときは相関 ID とログごと middleware 層へ降ろす
+**まとめての再設計**になる。中途半端にやると 2 を踏む。
 
-> 2026-08-09 に**最外周の 1 枚だけ**を middleware にした（`requestContext` /
-> `notFoundResponse`）。相関 ID は経路にマッチしないリクエストにも要るもので、
+> 2026-08-09 に**最外周の 1 枚だけ**を middleware にした（`resolveRequestId` /
+> `handleNotFound`）。相関 ID は経路にマッチしないリクエストにも要るもので、
 > **そこにしか置けない**から。認証と契約検証は経路ごとに要否が変わるので中に残した。
 > 「責務で切ったとき、middleware にしか置けないものだけを外に出す」が今の線引き。
 >
@@ -160,24 +163,25 @@ HTTP 境界のテストは 1 行も変えずに通り続けた（安定した縫
 作り替えの過程で見つかった罠は、いずれも既にテストで固定してある。
 **重複して書かないこと**（どれも「壊れると気付きにくい」類なので、消さないこと）。
 
-| 対象                          | 固定されている挙動                                 | 壊れたときに起きること                     |
-| ----------------------------- | -------------------------------------------------- | ------------------------------------------ |
-| `checkMailAddressDuplication` | `excluding` が自分の id なら重複と見なさない       | 「メールアドレスを変えない更新」が常に 409 |
-| `checkMailAddressDuplication` | 他人が使っていれば 409                             | 重複を素通しし、DB の unique 制約で 500    |
-| `changeUserProfile`           | `updatedAt` だけ進み `createdAt` は据え置き        | 作成日時が更新のたびに書き換わる           |
-| `changeUserProfile`           | 元の集約は書き換わらない（新しい値を返す）         | 呼び出し側が握っている集約に変更が波及する |
-| `handleWithEffect`            | `status: 204` は本文を持たない                     | 契約と異なる応答を返す                     |
-| `handleWithEffect`            | 応答は契約スキーマどおり（余分な項目が出ない）     | 射影で落としたはずの項目が漏れる           |
-| `verifyUserPassword`          | 照合に渡すのは「現在の平文」と「保存済みハッシュ」 | 新旧を取り違え、どんな平文でも通る         |
-| `changePasswordCommand`       | 401 のときは永続化が走らない                       | 照合に失敗してもパスワードが変わる         |
-| `changeUserPassword`          | 変わるのは hashedPassword と updatedAt だけ        | 名前・メールアドレス・作成日時が巻き戻る   |
-| `handleWithEffect`            | defect でも契約どおりの 500 と相関 ID を返す       | 平文 500 が返り、ログも残らない            |
-| `requestContext`              | 経路にマッチしなくても相関 ID と契約の形の 404     | 打ち間違いの調査で手掛かりが消える         |
-| `resolveRequestId`            | 載せられない ID を採番した値で置き換える           | ログインジェクションの防御が効かない       |
-| `classifyRefreshToken`        | 猶予期間の境界 30 秒ちょうどは内側                 | 並行更新したタブが盗難扱いされる           |
-| `classifyRefreshToken`        | 理由が `rotated` 以外なら猶予を与えない            | 切ったセッションが 30 秒間生き返る         |
-| `refreshCommand`              | 再利用のみセッションを切り、失効済みは切り直さない | 盗難検出の直後にセッションが復活する       |
-| `loginCommand`                | 保存するのはハッシュだけ / `sid` はセッション      | 平文の券が DB に残る、ログアウトが効かない |
+| 対象                          | 固定されている挙動                                 | 壊れたときに起きること                      |
+| ----------------------------- | -------------------------------------------------- | ------------------------------------------- |
+| `checkMailAddressDuplication` | `excluding` が自分の id なら重複と見なさない       | 「メールアドレスを変えない更新」が常に 409  |
+| `checkMailAddressDuplication` | 他人が使っていれば 409                             | 重複を素通しし、DB の unique 制約で 500     |
+| `changeUserProfile`           | `updatedAt` だけ進み `createdAt` は据え置き        | 作成日時が更新のたびに書き換わる            |
+| `changeUserProfile`           | 元の集約は書き換わらない（新しい値を返す）         | 呼び出し側が握っている集約に変更が波及する  |
+| `handleWithEffect`            | `status: 204` は本文を持たない                     | 契約と異なる応答を返す                      |
+| `handleWithEffect`            | 応答は契約スキーマどおり（余分な項目が出ない）     | 射影で落としたはずの項目が漏れる            |
+| `verifyUserPassword`          | 照合に渡すのは「現在の平文」と「保存済みハッシュ」 | 新旧を取り違え、どんな平文でも通る          |
+| `changePasswordCommand`       | 401 のときは永続化が走らない                       | 照合に失敗してもパスワードが変わる          |
+| `changeUserPassword`          | 変わるのは hashedPassword と updatedAt だけ        | 名前・メールアドレス・作成日時が巻き戻る    |
+| `handleWithEffect`            | defect でも契約どおりの 500 と相関 ID を返す       | 平文 500 が返り、ログも残らない             |
+| `resolveRequestId`            | 経路にマッチしなくても相関 ID を応答に載せる       | 打ち間違いの調査で手掛かりが消える          |
+| `handleNotFound`              | 未知の経路でも契約と同じ形の 404                   | 平文 404 が返り、クライアントの分岐が割れる |
+| `resolveRequestId`            | 載せられない ID を採番した値で置き換える           | ログインジェクションの防御が効かない        |
+| `classifyRefreshToken`        | 猶予期間の境界 30 秒ちょうどは内側                 | 並行更新したタブが盗難扱いされる            |
+| `classifyRefreshToken`        | 理由が `rotated` 以外なら猶予を与えない            | 切ったセッションが 30 秒間生き返る          |
+| `refreshCommand`              | 再利用のみセッションを切り、失効済みは切り直さない | 盗難検出の直後にセッションが復活する        |
+| `loginCommand`                | 保存するのはハッシュだけ / `sid` はセッション      | 平文の券が DB に残る、ログアウトが効かない  |
 
 ### まだ埋まっていない穴
 
@@ -225,7 +229,7 @@ HTTP 境界のみという方針なので、単体テストを足すかどうか
 最初の 1 つしか返さない件（`validateQuery` の doc 参照）も、そのとき判断する。
 
 `validateHeader` の失敗経路は、全テストが正しい `X-Request-Id` を送っているため
-成功経路しか踏んでいない（`requestContext` のテストが不正な ID を送るのは
+成功経路しか踏んでいない（`resolveRequestId` のテストが不正な ID を送るのは
 経路にマッチしないリクエストなので、`validateHeader` までは届かない）。
 
 ### テストの限界（意図的に受け入れているもの）
@@ -368,9 +372,9 @@ Query Service 側と重なっているのは `Option.fromNullable(rows[0])` の 
 
 > 2026-08-09 に **265 行 → 168 行**（コード 170 → 105 行）へ落とした。中身を削ったのではなく、
 > 置き場を直しただけ。`RequestSchemas` / `ValidatedRequest` / `ControllerInput` と
-> `validateRequest` は [`request-validator.ts`](../src/shared/presentation/request-validator.ts) へ、
-> 失敗と defect の受け皿は [`handle-failures.ts`](../src/shared/presentation/handle-failures.ts) へ移した。
-> 後者を `handle-error-response.ts` に置かなかったのは、`request-log.ts` が
+> `validateRequest` は [`validate-request.ts`](../src/shared/presentation/handler/validate-request.ts) へ、
+> 失敗と defect の受け皿は [`handle-failures.ts`](../src/shared/presentation/handler/handle-failures.ts) へ移した。
+> 後者を `handle-error-response.ts` に置かなかったのは、ログ側が
 > そちらの `ApplicationError` を参照しており**循環になる**ため。
 > 残った `handleWithEffect` は組み立てだけを持つ。
 

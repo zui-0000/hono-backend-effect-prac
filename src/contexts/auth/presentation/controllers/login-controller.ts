@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 
 import type { LoginBody } from "~/generated/auth";
-import { decodeInput } from "~/shared/presentation/request-validator";
+import { decodeInput } from "~/shared/presentation/decode-input";
 
 import {
   LoginCommandInput,

@@ -17,7 +17,7 @@ import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { ErrorMessage } from "~/shared/presentation/constants/error-message";
 import { HttpHeader } from "~/shared/presentation/constants/http-header";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
-import type { RequestContextEnv } from "~/shared/presentation/request-context";
+import type { RequestIdEnv } from "~/shared/presentation/resolve-request-id";
 
 import { verifyBearer } from "../verify-bearer";
 
@@ -40,7 +40,7 @@ describe(verifyBearer.name, () => {
 
   /** 認証を要求する 4 本を叩く。ボディは契約を満たす形にしておく。 */
   const requestsNeedingAuth = async (
-    app: Hono<RequestContextEnv>,
+    app: Hono<RequestIdEnv>,
   ): Promise<readonly Response[]> =>
     await Promise.all([
       app.request(`/users/${FIXED_UUID}`, { headers: withoutAuth }),
@@ -101,6 +101,28 @@ describe(verifyBearer.name, () => {
           message: ErrorMessage.Unauthorized,
         });
       }
+    });
+
+    test("契約も満たさない場合、検証の詳細を返さず 401 にすること", async () => {
+      const app = createApp(makeRuntime());
+
+      // 名前は空、メールアドレスも形式違反。**認証を通っていない相手には
+      // どのフィールドがなぜ駄目かを教えない** (契約を教えるのと同じになる)。
+      const response = await app.request(`/users/${FIXED_UUID}`, {
+        method: "PUT",
+        headers: withoutAuth,
+        body: JSON.stringify({
+          name: "",
+          mailAddress: "not-a-mail",
+        } satisfies typeof UpdateUserBody.Encoded),
+      });
+
+      expect(response.status).toBe(HttpStatus.Unauthorized);
+      // details が付いていないこと。toStrictEqual なので余計なキーは通らない。
+      expect(await response.json()).toStrictEqual({
+        errorCode: ErrorCode.Unauthorized,
+        message: ErrorMessage.Unauthorized,
+      });
     });
 
     test("署名の検証に失敗した場合、ヘッダが在っても 401 を返すこと", async () => {

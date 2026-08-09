@@ -5,7 +5,7 @@ import {
   DeleteUserCommandInput,
 } from "~/contexts/user/application/delete-user-command";
 import type { DeleteUserParams } from "~/generated/users";
-import { decodeInput } from "~/shared/presentation/request-validator";
+import { decodeInput } from "~/shared/presentation/decode-input";
 
 type DeleteUserControllerInput = { params: typeof DeleteUserParams.Type };
 

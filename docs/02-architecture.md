@@ -28,7 +28,7 @@ src/
 │  │                    #   直下はドメインが環境から得るもの（時刻 / 採番 / ハッシュ化）
 │  ├─ application/      # ユースケースの共通部品（orNotFound）。層で切った並びの一員
 │  ├─ errors/           # 型付きエラー（Data.TaggedError）
-│  ├─ presentation/     # ハンドラ / 検証 / エラー翻訳 / ログ / 最外周 middleware
+│  ├─ presentation/     # 直下は公開面（入口 3 つ + 語彙）、handler/ が部品
 │  │  └─ constants/     #   API が外に見せる語彙。公開するのが `as const` の表と
 │  │                    #   派生型だけのファイルを置く（振る舞いを持つものは直下）
 │  └─ infrastructure/   # 実装（Layer）。横断ポートの本番実装と、DB の実行時コード
@@ -203,8 +203,8 @@ application も presentation も影響を受けない。
 形が違うが、そもそも別種のものなので揃えない。
 
 そのハンドラの中身も、いまは**組み立てだけ**が残っている。入力の検証と
-controller への組み立ては `request-validator.ts`、失敗と defect の受け皿は
-`handle-failures.ts` が持つ（経緯は
+controller への組み立ては `handler/validate-request.ts`、失敗と defect の受け皿は
+`handler/handle-failures.ts` が持つ（経緯は
 [`04-backlog.md`](04-backlog.md#handlewitheffect-の型の複雑さ)）。
 
 > `validate*` を presentation に予約したのとは扱いが違う。あちらは同じ語が層をまたぐと
@@ -234,8 +234,8 @@ presentation/
 ### middleware は最外周の 1 枚だけ
 
 ```ts
-app.use("*", requestContext(runtime)); // 相関 ID（全リクエスト）
-app.notFound(notFoundResponse); // 契約と同じ形の 404
+app.use("*", resolveRequestId(runtime)); // 相関 ID（全リクエスト）
+app.notFound(handleNotFound); // 契約と同じ形の 404
 ```
 
 **middleware に出すのは「そこにしか置けないもの」だけ。**
@@ -255,6 +255,52 @@ Hono は宣言した `Variables` をチェーン先まで交差型で伝播さ�
 **採番するのは middleware だけ。** `resolveRequestId` は受け取った値が
 ログに載せられない形式なら採番で代替するため、2 箇所で呼ぶと
 **応答ヘッダとログに別々の ID が載る**。`handleWithEffect` は読むだけにしてある。
+
+### `shared/presentation/` は公開面と部品を分ける
+
+```text
+shared/presentation/
+├─ handle-with-effect.ts   入口: *-routes.ts が使う
+├─ decode-input.ts         入口: controller が使う
+├─ resolve-request-id.ts   入口: app.ts が使う（最外周 middleware）
+├─ handle-not-found.ts     入口: app.ts が使う
+├─ constants/              API が外に見せる語彙
+└─ handler/                handleWithEffect が組み立てる部品（外から参照禁止）
+   ├─ verify-bearer.ts        ① 認証
+   ├─ validate-request.ts     ② 契約検証
+   ├─ handle-error-response.ts   エラー翻訳表
+   ├─ handle-failures.ts      ⑤ 失敗と defect を畳む
+   └─ log-failure.ts             ログ
+```
+
+**切る基準は「誰が使うか」。** 測ったところ 7 ファイル中 4 つは
+`shared/presentation` の外から一度も参照されていなかった。
+直下に残したのは**聴衆が 1 つずつ**あるものだけで、それ以外は `handler/` へ入れた。
+
+`handler/` を外から参照するのは lint で禁じている
+（[`03-boundary-enforcement.md`](03-boundary-enforcement.md#層ごとの可否)）。
+直接掴まれるとパイプラインの段を並べ替えるだけで利用側が壊れるし、
+controller が `validate*` を直接呼べば**同じ検証が二度走る**。
+
+`handle-not-found.ts` が `handler/handle-error-response.ts` を使うのは正しい。
+あれ自体が Hono の `NotFoundHandler` で、**翻訳表を 1 箇所に保つ**ためにそうしている。
+
+### 経路の不在に専用コードは振らない
+
+`4041` を足す案を検討して**見送った**。「原因も直し方も違う」（4040 は入力を直す、
+経路の不在は呼び出し先が間違っている）という理由は立つが、**誰も分岐しない**。
+
+**独自採番はクライアントが分岐する必要のある事由に限る。** `4091`（メールアドレス
+重複）は画面に「別のアドレスを入れて」と出すために汎用の 409 と区別が要る。
+一方、経路の打ち間違いはフロントエンドの実装が正しければ起きず、起きても
+クライアント側で処理を変えようがない。コードを増やせば契約の周知と実装の手間が
+乗るので、**増やす側に理由が要る**。
+
+> 検討の過程で分かったこと: **この種のコードは契約 (TypeSpec) に置けない。**
+> どの操作の応答でもないため、モデルを足しても参照されず、OpenAPI に出力されない
+> （実測で確認。参照されている `MailAddressAlreadyExistsError` は 5 箇所に出る）。
+> 仮に足すなら値の登録簿は `constants/error-code.ts` だけになる、という非対称が生じる。
+> これも見送りの理由の 1 つ。
 
 ---
 

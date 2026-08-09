@@ -8,9 +8,9 @@ import type { RepositoryError } from "~/shared/errors/repository-error";
 import type { ResourceNotFoundError } from "~/shared/errors/resource-not-found-error";
 import type { UnauthorizedError } from "~/shared/errors/unauthorized-error";
 
-import { ErrorCode } from "./constants/error-code";
-import { ErrorMessage } from "./constants/error-message";
-import { HttpStatus } from "./constants/http-status";
+import { ErrorCode } from "../constants/error-code";
+import { ErrorMessage } from "../constants/error-message";
+import { HttpStatus } from "../constants/http-status";
 
 /**
  * presentation 層が HTTP に翻訳できるエラーの集合。

@@ -6,7 +6,7 @@ import {
   defectResponse,
   handleErrorResponse,
 } from "./handle-error-response";
-import { logDefect, logFailure } from "./request-log";
+import { logDefect, logFailure } from "./log-failure";
 
 /**
  * 応答を組み立てる Effect の**いちばん外側**に置き、失敗をすべて応答へ畳む。

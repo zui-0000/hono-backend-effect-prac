@@ -8,7 +8,7 @@ import type {
   ChangePasswordBody,
   ChangePasswordParams,
 } from "~/generated/users";
-import { decodeInput } from "~/shared/presentation/request-validator";
+import { decodeInput } from "~/shared/presentation/decode-input";
 
 type ChangePasswordControllerInput = {
   body: typeof ChangePasswordBody.Type;

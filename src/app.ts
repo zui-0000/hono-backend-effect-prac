@@ -3,11 +3,11 @@ import { Hono } from "hono";
 import type { AppRuntime } from "~/app-runtime";
 import { authRoutes } from "~/contexts/auth/presentation/auth-routes";
 import { userRoutes } from "~/contexts/user/presentation/user-routes";
+import { handleNotFound } from "~/shared/presentation/handle-not-found";
 import {
-  notFoundResponse,
-  requestContext,
-  type RequestContextEnv,
-} from "~/shared/presentation/request-context";
+  type RequestIdEnv,
+  resolveRequestId,
+} from "~/shared/presentation/resolve-request-id";
 
 /**
  * アプリ全体を組み立てる。
@@ -25,10 +25,10 @@ import {
  * 認証と契約検証は経路ごとに要否が変わるので、外には出さない。
  */
 export const createApp = (runtime: AppRuntime) => {
-  const app = new Hono<RequestContextEnv>();
+  const app = new Hono<RequestIdEnv>();
 
-  app.use("*", requestContext(runtime));
-  app.notFound(notFoundResponse);
+  app.use("*", resolveRequestId(runtime));
+  app.notFound(handleNotFound);
 
   app.get("/health", (c) => c.json({ status: "ok" }));
 

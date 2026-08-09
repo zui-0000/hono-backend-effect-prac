@@ -5,7 +5,7 @@ import {
   CreateUserCommandInput,
 } from "~/contexts/user/application/create-user-command";
 import type { CreateUserBody } from "~/generated/users";
-import { decodeInput } from "~/shared/presentation/request-validator";
+import { decodeInput } from "~/shared/presentation/decode-input";
 
 type CreateUserControllerInput = { body: typeof CreateUserBody.Type };
 

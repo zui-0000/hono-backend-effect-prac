@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 
 import type { AccessTokenClaims } from "~/shared/domain/access-token-issuer";
-import { decodeInput } from "~/shared/presentation/request-validator";
+import { decodeInput } from "~/shared/presentation/decode-input";
 
 import {
   LogoutCommandInput,
