@@ -18,6 +18,7 @@ import {
 } from "~/generated/users";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
 import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
+import type { RequestContextEnv } from "~/shared/presentation/request-context";
 
 import type { UserRuntime } from "../user-runtime";
 import { changePasswordController } from "./controllers/change-password-controller";
@@ -41,8 +42,8 @@ import { updateUserController } from "./controllers/update-user-controller";
  * 認証不要で、残る 4 本は Bearer を要求する。宣言すると handleWithEffect が署名を検証し、
  * controller の入力に claims が載る。
  */
-export const userRoutes = (runtime: UserRuntime): Hono => {
-  const routes = new Hono();
+export const userRoutes = (runtime: UserRuntime): Hono<RequestContextEnv> => {
+  const routes = new Hono<RequestContextEnv>();
 
   routes.post(
     "/",

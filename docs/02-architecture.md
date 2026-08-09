@@ -28,7 +28,7 @@ src/
 │  │                    #   直下はドメインが環境から得るもの（時刻 / 採番 / ハッシュ化）
 │  ├─ application/      # ユースケースの共通部品（orNotFound）。層で切った並びの一員
 │  ├─ errors/           # 型付きエラー（Data.TaggedError）
-│  ├─ presentation/     # ハンドラ / 検証 / エラー翻訳 / リクエストログ の共通基盤
+│  ├─ presentation/     # ハンドラ / 検証 / エラー翻訳 / ログ / 最外周 middleware
 │  │  └─ constants/     #   API が外に見せる語彙。公開するのが `as const` の表と
 │  │                    #   派生型だけのファイルを置く（振る舞いを持つものは直下）
 │  └─ infrastructure/   # 実装（Layer）。横断ポートの本番実装と、DB の実行時コード
@@ -230,6 +230,31 @@ presentation/
 移すと routes が `infrastructure/` を掴んでも誰も咎めなくなる — 実際に動かして測ると、
 わざと `UserRepositoryLive` を掴ませたときの検出が **10 件から 0 件**になった。
 `~/generated` の参照も両方の lint に弾かれるので、穴を開ける必要も生じる。
+
+### middleware は最外周の 1 枚だけ
+
+```ts
+app.use("*", requestContext(runtime)); // 相関 ID（全リクエスト）
+app.notFound(notFoundResponse); // 契約と同じ形の 404
+```
+
+**middleware に出すのは「そこにしか置けないもの」だけ。**
+`handleWithEffect` は**マッチした経路でしか走らない**ので、パスの打ち間違いも
+許可されないメソッドも `/health` も、相関 ID もログも無いまま Hono 既定の
+平文 404 になっていた（実測で確認）。調べたい場面でちょうど手掛かりが消えるので、
+ここは外に出すしかない。
+
+逆に**認証と契約検証は外に出さない**。要否が経路ごとに変わるものなので、
+`handleWithEffect` の `request` 宣言に残す。全部を middleware へ降ろす案とその
+見送り理由は [`04-backlog.md`](04-backlog.md#認証を-hono-の-middleware-へ降ろすか見送り中)。
+
+型は `createMiddleware<{ Variables: { requestId: string } }>` で宣言する。
+Hono は宣言した `Variables` をチェーン先まで交差型で伝播させるので、
+ハンドラ側の `c.get("requestId")` が `string` になる。
+
+**採番するのは middleware だけ。** `resolveRequestId` は受け取った値が
+ログに載せられない形式なら採番で代替するため、2 箇所で呼ぶと
+**応答ヘッダとログに別々の ID が載る**。`handleWithEffect` は読むだけにしてある。
 
 ---
 

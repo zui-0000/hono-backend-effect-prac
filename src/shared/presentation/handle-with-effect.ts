@@ -5,11 +5,10 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
 
-import { HttpHeader } from "./constants/http-header";
 import { HttpStatus } from "./constants/http-status";
 import type { ApplicationError } from "./handle-error-response";
 import { handleFailures } from "./handle-failures";
-import { resolveRequestId } from "./request-log";
+import type { RequestContextEnv } from "./request-context";
 import {
   type ControllerInput,
   type RequestSchemas,
@@ -54,14 +53,14 @@ type ContentfulSpec<A, ResponseA, ResponseI, Req extends RequestSchemas, R> = {
  * 共通の実行部。成功時の応答の作り方 (respond) だけを呼び出し側から受け取る。
  *
  * 実行の流れ:
- *   1. 相関 ID を解決し、応答ヘッダに載せる
- *   2. リクエストを API 契約で検証する (validateRequest)
- *   3. controller を実行する
- *   4. 結果を HTTP 応答に変換する (respond)
- *   5. 失敗と defect を応答へ畳む (handleFailures)
+ *   1. リクエストを API 契約で検証する (validateRequest)
+ *   2. controller を実行する
+ *   3. 結果を HTTP 応答に変換する (respond)
+ *   4. 失敗と defect を応答へ畳む (handleFailures)
  *
- * 1 を先にやるのは、**契約違反で弾かれるリクエストもログに残すため**。
- * 検証の後ろに置くと、いちばん調べたい 400 に相関 ID が付かない。
+ * 相関 ID は**採番しない**。`requestContext` middleware が全リクエストで確定させた
+ * ものを読むだけ。2 箇所で採番すると、受け取った値が使えないときに
+ * 応答ヘッダとログへ別々の ID が載る。
  */
 const handle =
   <A, Req extends RequestSchemas, R>(
@@ -76,12 +75,11 @@ const handle =
       R | UuidGenerator | AccessTokenIssuer,
       never
     >,
-  ): Handler =>
+  ): Handler<RequestContextEnv> =>
   async (c) =>
     await runtime.runPromise(
       Effect.gen(function* () {
-        const requestId = yield* resolveRequestId(c);
-        c.header(HttpHeader.RequestId, requestId);
+        const requestId = c.get("requestId");
 
         return yield* validateRequest(c, request).pipe(
           Effect.flatMap(controller),
@@ -150,7 +148,7 @@ export const handleWithEffect = <
     R | UuidGenerator | AccessTokenIssuer,
     never
   >,
-) => Handler) => {
+) => Handler<RequestContextEnv>) => {
   if (isContentful(spec)) {
     const { status, body: bodySchema } = spec.response;
     return handle(spec.request, spec.controller, (c, value) =>

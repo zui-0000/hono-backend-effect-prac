@@ -17,6 +17,7 @@ import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { ErrorMessage } from "~/shared/presentation/constants/error-message";
 import { HttpHeader } from "~/shared/presentation/constants/http-header";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
+import type { RequestContextEnv } from "~/shared/presentation/request-context";
 
 import { verifyBearer } from "../verify-bearer";
 
@@ -38,7 +39,9 @@ describe(verifyBearer.name, () => {
   };
 
   /** 認証を要求する 4 本を叩く。ボディは契約を満たす形にしておく。 */
-  const requestsNeedingAuth = async (app: Hono): Promise<readonly Response[]> =>
+  const requestsNeedingAuth = async (
+    app: Hono<RequestContextEnv>,
+  ): Promise<readonly Response[]> =>
     await Promise.all([
       app.request(`/users/${FIXED_UUID}`, { headers: withoutAuth }),
       app.request(`/users/${FIXED_UUID}`, {

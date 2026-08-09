@@ -11,6 +11,7 @@ import {
 } from "~/generated/auth";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
 import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
+import type { RequestContextEnv } from "~/shared/presentation/request-context";
 
 import type { AuthRuntime } from "../auth-runtime";
 import { loginController } from "./controllers/login-controller";
@@ -24,8 +25,8 @@ import { refreshController } from "./controllers/refresh-controller";
  * logout だけが認証を要する。`auth: true` を宣言すると handleWithEffect が
  * Bearer を検証し、controller の入力に claims が載る。
  */
-export const authRoutes = (runtime: AuthRuntime): Hono => {
-  const routes = new Hono();
+export const authRoutes = (runtime: AuthRuntime): Hono<RequestContextEnv> => {
+  const routes = new Hono<RequestContextEnv>();
 
   routes.post(
     "/login",
