@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 
 /** SHA-256 を 16 進で表した形 (64 文字)。 */
-const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/;
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/u;
 
 /**
  * リフレッシュトークンのハッシュ (値オブジェクト / branded string)。

@@ -5,7 +5,7 @@ import { Schema } from "effect";
  * argon2id (`$argon2id$`) も bcrypt (`$2b$`) も scrypt も共通で従う規約なので、
  * 特定のアルゴリズムを名指しせずに「ハッシュの形をしているか」だけを見られる。
  */
-const PHC_PATTERN = /^\$[a-z0-9-]+\$/;
+const PHC_PATTERN = /^\$[a-z0-9-]+\$/u;
 
 /**
  * ハッシュ済みパスワード (値オブジェクト / 不透明な branded string)。

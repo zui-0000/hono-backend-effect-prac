@@ -2,7 +2,7 @@ import { Schema } from "effect";
 
 // UUID v7 の形式 (TypeSpec schema 側の Uuid と同一パターン)。
 const UUID_V7_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 /**
  * UUID v7 形式の文字列スキーマ (未 brand・共有ドメイン)。

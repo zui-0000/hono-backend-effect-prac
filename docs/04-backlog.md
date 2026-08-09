@@ -130,13 +130,35 @@ GetUserQueryOutput = { name, mailAddress };
 **一度も import されなかったファイルを表に載せない**ため、未テストのモジュールが
 0% ではなく「存在しない」ことになり、分母が安定していないから。
 
-### 4. oxlint の規約の見直し
+### 4. oxlint の規約の見直し（2026-08-09 に一巡した）
 
-いま `error` にしているのは `correctness` だけで、`suspicious` / `pedantic` /
-`style` / `perf` は未設定。**まず `warn` で入れて件数を見る**のが安全。
+全カテゴリを `warn` で通して測った。**カテゴリ単位で足すものは無かった。**
 
-追加・変更したら [わざと違反するファイルを作って確認する](03-boundary-enforcement.md#落とし穴)。
-検出されることと、**許可すべきものが通ること**の両方を見る。
+| カテゴリ      | 件数 | 判断                                                   |
+| ------------- | ---- | ------------------------------------------------------ |
+| `perf`        | 2    | `Effect.map` の誤検出 + テストの `await`               |
+| `suspicious`  | 3    | **全件** `_tag`（`Data.TaggedError` の判別子）の誤検出 |
+| `pedantic`    | 54   | 下記                                                   |
+| `restriction` | 174  | `no-async-await` 66 件                                 |
+| `style`       | 636  | `sort-keys` 141 件（`ErrorCode` の HTTP 順を壊す）     |
+
+落とした理由は件数ではなく中身。**Effect のメソッド名が配列のそれと衝突する**ため、
+この codebase でいちばん多い書き方が軒並み誤検出になる
+（`Option.some` → `Array.prototype.some`、`Effect.map` → `Array.prototype.map`）。
+
+採ったのは `require-unicode-regexp` の 1 本だけ。**測ったなかで偽陽性が
+ゼロだった唯一のルール**で、6 件すべて実在・修正は `u` を 1 文字足すだけだった。
+`u` の前後で値オブジェクトの通る／弾かれるが変わらないことも実測済み。
+
+> **惜しかったもの: `unicorn/no-array-callback-reference`。**
+> 実際に踏んだバグ（`arr.map(Schema.encodeSync(X))` が index を `ParseOptions` に
+> 食わせる）を検出できることを確認したが、**17 件中 16 件が `Option.some` の誤検出**。
+> 黙らせるには disable コメントが 16 個要るので見送った。
+> **着手の引き金は oxlint がこのルールに除外設定を持つこと。**
+
+判断そのものは [`.oxlintrc.jsonc`](../.oxlintrc.jsonc) にも書いてある。
+次に足すときも [わざと違反するファイルを作って確認する](03-boundary-enforcement.md#落とし穴)
+—— 検出されることと、**許可すべきものが通ること**の両方を見る。
 
 ### 5. Claude が読めるコード規約の作成
 

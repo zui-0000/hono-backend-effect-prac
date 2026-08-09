@@ -10,7 +10,7 @@ import { UnauthorizedError } from "~/shared/errors/unauthorized-error";
 import { HttpHeader } from "../constants/http-header";
 
 /** `Authorization: Bearer <token>` から券だけを取り出す。 */
-const BEARER_PATTERN = /^Bearer (.+)$/;
+const BEARER_PATTERN = /^Bearer (.+)$/u;
 
 /**
  * `Authorization` ヘッダのアクセストークンを検証し、claims を取り出す。

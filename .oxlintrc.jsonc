@@ -4,7 +4,21 @@
   //   typescript = TS 特有ルール / unicorn = モダン JS の慣習 / oxc = Oxc 独自ルール
   "plugins": ["typescript", "unicorn", "oxc"],
   // カテゴリ単位で一括設定。correctness = "明確に間違い/無意味なコード" のみ error。
-  // まずは誤検知の少ない最小構成。厳しくするなら suspicious / perf / style を "warn" で追加。
+  //
+  // **他のカテゴリは足さない。** 2026-08-09 に全カテゴリを warn で通して測った結果:
+  //   perf 2 / suspicious 3 / pedantic 54 / restriction 174 / style 636
+  // 件数ではなく中身で落とした。Effect のメソッド名が配列のそれと衝突するため、
+  // **この codebase でいちばん多い書き方が軒並み誤検出になる**。
+  //   Option.some(...)  → Array.prototype.some と誤認 (no-array-callback-reference 17 件中 16 件)
+  //   Effect.map(...)   → Array.prototype.map  と誤認 (no-map-spread)
+  //   _tag              → Data.TaggedError の判別子 (no-underscore-dangle、suspicious の全件)
+  // style/restriction は方針とも衝突する (sort-keys は ErrorCode の
+  // HTTP ステータス順を壊し、no-async-await は 66 件)。
+  //
+  // 惜しかったのは no-array-callback-reference で、実際に踏んだバグ
+  // (`arr.map(Schema.encodeSync(X))` が index を ParseOptions に食わせる) を
+  // 検出できる。ただし 94% がノイズで、黙らせるには disable コメントが 16 個要る。
+  // 個別に採るものは下の "rules" に書く。
   "categories": {
     "correctness": "error",
   },
@@ -13,6 +27,10 @@
     // ファイル名は kebab-case (ハイフン繋ぎ) を強制。
     // OS 間の大小事故 (macOS/Windows は大小無視) と命名ブレを防ぐ。
     "unicorn/filename-case": ["error", { "case": "kebabCase" }],
+    // 正規表現に u フラグを必須にする。
+    // 不正なエスケープがエラーになり、\w や \d の意味がロケールで揺れなくなる。
+    // 全カテゴリを測ったなかで**偽陽性がゼロだった唯一のルール** (6 件・全部実在)。
+    "require-unicode-regexp": "error",
     // 既定として、生成コード (API 契約) はどこからも使わせない。
     // 唯一の例外である presentation 層だけ、下の overrides で許可する。
     // ここに書いておくことで、どの override にも当たらないファイル

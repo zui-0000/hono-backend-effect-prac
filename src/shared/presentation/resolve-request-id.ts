@@ -28,7 +28,7 @@ export type RequestIdEnv = {
 const MAX_LENGTH = 128;
 
 /** ログに混入させない文字を除いた、安全な相関 ID の形式。 */
-const SAFE_PATTERN = /^[\w.-]+$/;
+const SAFE_PATTERN = /^[\w.-]+$/u;
 
 /**
  * **全リクエストの最外周。** 相関 ID を確定させ、下流と応答ヘッダへ配る。
