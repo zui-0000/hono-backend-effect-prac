@@ -39,14 +39,22 @@ import { UuidGeneratorLive } from "~/shared/infrastructure/uuid-generator-live";
  *
  * shared/ ではなく src 直下に置くのは、contexts を import する唯一の層だから。
  * 共有基盤 (shared/) が個別コンテキストを知る構造を避ける。
+ *
+ * `PasswordHasherLive` だけ `provideMerge` なのは、**供給しつつ外にも出す**ため。
+ * UserLayer が PasswordHasher を要求する (verifyUserPassword 経由) 一方、
+ * command も直接要求するので AppServices にも現れる必要がある。
+ * `mergeAll` は各 Layer を**並列に**構築するので、同じ mergeAll の中に置いても
+ * 要求は満たされない。かつては `mergeAll` と `provide` の両方に同じ Layer を
+ * 書いて辻褄を合わせていたが、`provideMerge` はその 2 つを 1 つの語で表す。
+ * (この形は @effect/tsgo の layerMergeAllWithDependencies が指摘した。
+ *  tsc も oxlint も見つけられない種類の問題。)
  */
 export const AppLayer = Layer.mergeAll(
   UserLayer,
   AuthLayer,
-  PasswordHasherLive,
   AccessTokenIssuerLive,
   UuidGeneratorLive,
-).pipe(Layer.provide(Layer.mergeAll(PasswordHasherLive, DatabaseLive)));
+).pipe(Layer.provideMerge(PasswordHasherLive), Layer.provide(DatabaseLive));
 
 /**
  * AppLayer が提供するサービスの総体。

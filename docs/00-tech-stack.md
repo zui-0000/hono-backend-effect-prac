@@ -10,6 +10,7 @@
 | DB                 | PostgreSQL 18（Docker）                    |
 | ORM                | Drizzle（`bun-sql` ドライバ）              |
 | Lint / Format      | oxlint / oxfmt                             |
+| Effect の静的検査  | @effect/tsgo（Effect 固有の診断）          |
 | API スキーマ       | TypeSpec（OpenAPI 3.1 を生成）             |
 | バリデーション     | Effect Schema（orval で OpenAPI から生成） |
 | 言語               | TypeScript                                 |
@@ -49,6 +50,53 @@ pnpm は v11 から [`minimumReleaseAge`](https://pnpm.io/settings/dependency-re
 `-r` は既定でワークスペースルートを除外するので誤解のもとになる。
 
 ---
+
+## Effect 固有の診断（@effect/tsgo）
+
+tsc も oxlint も**Effect の意味を知らない**。`yield*` を忘れた Effect も、
+`Layer.mergeAll` の中で依存が満たされない Layer も、型としては正しいので通る。
+そこだけを見るのが [`@effect/tsgo`](https://github.com/Effect-TS/tsgo)。
+**`tsc` そのものに混ぜてある**ので、`pnpm check:types` が Effect 診断も出す。
+
+```text
+error TS377001: This Effect value is neither yielded nor used in an assignment. effect(floatingEffect)
+```
+
+`@effect/tsgo` は TypeScript-Go の上位集合で、**入っている TypeScript と同じ版の
+`tsc` バイナリを同梱している**（7.0.2 用が入る）。`prepare` の
+`effect-tsgo patch --typescript` がそれを差し込む。
+
+動かし方は 3 つあり（`tsc` に混ぜる / 専用コマンド / oxlint patch）、**1 つ目を選んだ**。
+専用コマンドは型チェックがもう一度走るため、実測で `lint:fix` が 1.7 秒延びた。
+混ぜれば `check:types` は 1.06 秒のままで、増分はゼロ。
+
+診断は warning でも `tsc` の終了コードを 1 にする（実測で確認）。
+止まらないと CI を素通りするので、ここは既定のままでよい。
+
+> **この方式の弱点は「効いていなくても静か」なこと。** patch が当たっていなければ
+> `tsc` は普通に成功する。保険は 2 つ置いてある。
+> `prepare` が失敗すれば install ごと落ちること（同梱版が無ければ patch はエラーになる）と、
+> patch と無関係に走る `pnpm check:effect` が残してあること。
+> 疑わしいときは後者で確かめる。
+
+導入時に 103 ファイルから 1 件見つかった。`app-runtime.ts` が
+`PasswordHasherLive` を `mergeAll` と `provide` の両方に書いて辻褄を合わせていた箇所で、
+`Layer.provideMerge` に直すと重複ごと消えた（`AppServices` が変わらないことは
+型で、通しで動くことは実 DB で確認済み）。
+
+選定の経緯:
+
+| 候補                       | 判断                                                          |
+| -------------------------- | ------------------------------------------------------------- |
+| `@effect/eslint-plugin`    | 却下。最終更新 2025-04 で、ESLint 本体が要る（oxlint と二重） |
+| `@effect/language-service` | 却下。README が「TS 7 以降は @effect/tsgo を使え」と明記      |
+| `@effect/tsgo`             | **採用。** TS 7 対応で、CLI が CI に載る                      |
+
+**プラグイン名がパッケージ名と違う**（`tsconfig.json` に書くのは
+`@effect/language-service`）。ここは間違えやすい。
+
+代償は容量で、Go 版 tsgo のバイナリを同梱するため **node_modules が約 140MB 増える**。
+実行時間は 103 ファイルで約 1.7 秒（`tsc` の 1.1 秒とは別に走る）。
 
 ## Effect（Effect-TS）
 

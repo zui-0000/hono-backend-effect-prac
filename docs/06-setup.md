@@ -48,9 +48,14 @@ pnpm db:generate --name <name>   # --name は任意（省くとランダム語�
 pnpm db:migrate
 ```
 
-`pnpm install` で `prepare` が走り、`src/generated/` が作られる。
-生成物は git 管理していないので、**clone 直後は必ずこれを通す**
-（詳細は下の「スキーマ」）。
+`pnpm install` で `prepare` が走り、2 つのことが起きる。
+
+1. `src/generated/` が作られる（生成物は git 管理外なので、**clone 直後は必須**）
+2. `tsc` に Effect 診断が差し込まれる（`effect-tsgo patch --typescript`）
+
+2 のおかげで `pnpm check:types` が Effect 固有の問題も見る
+（[`00-tech-stack.md`](00-tech-stack.md#effect-固有の診断@effecttsgo)）。
+`node_modules` を作り直すたびに必要なので `prepare` に置いてある。
 
 DB コンテナの起動 / 停止を pnpm スクリプトにしていない理由や、
 マイグレーションの運用は [`01-database.md`](01-database.md) にある。

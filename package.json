@@ -10,13 +10,14 @@
     "check:types": "tsc --noEmit",
     "check:lint": "oxlint -c .oxlintrc.jsonc",
     "check:deps": "depcruise src --config .dependency-cruiser.mjs --output-type err-long",
+    "check:effect": "effect-tsgo diagnostics --project tsconfig.json --format pretty --strict",
     "check:updates": "pnpm outdated --long",
     "check:updates:pending": "pnpm --config.minimumReleaseAge=0 outdated --long",
     "format:check": "oxfmt -c .oxfmtrc.jsonc --check",
     "format:fix": "oxfmt -c .oxfmtrc.jsonc",
     "lint:fix": "pnpm check:lint --fix && pnpm format:fix && pnpm check:types && pnpm check:deps",
     "generate:api": "orval",
-    "prepare": "pnpm generate:api",
+    "prepare": "pnpm generate:api && effect-tsgo patch --typescript",
     "db:generate": "drizzle-kit generate --config ./drizzle.config.ts",
     "db:migrate": "bun run db/migrate.ts",
     "db:studio": "drizzle-kit studio --config ./drizzle.config.ts"
@@ -27,6 +28,7 @@
     "hono": "^4.13.1"
   },
   "devDependencies": {
+    "@effect/tsgo": "^0.35.0",
     "@swc/core": "^1.15.47",
     "@types/bun": "^1.3.14",
     "dependency-cruiser": "^18.1.1",

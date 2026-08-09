@@ -1,5 +1,20 @@
 {
   "compilerOptions": {
+    // --- Effect 固有の診断 (@effect/tsgo) ---
+    //     プラグイン名がパッケージ名と違う (@effect/language-service) ことに注意。
+    //     エディタでは補完・リファクタ・hover に、CI では check:effect に効く。
+    //     tsc / oxlint が見つけられない種類 —— yield* し忘れた Effect、
+    //     Layer.mergeAll 内の依存、catch できないエラーの捕捉など —— を見る。
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": true,
+        "refactors": true,
+        "quickinfo": true,
+        "completions": true
+      }
+    ],
+
     // --- 出力 (Bun が直接 TS を実行するため emit しない) ---
     "noEmit": true,
     "target": "ESNext",

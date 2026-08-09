@@ -19,7 +19,7 @@ pnpm test
 # API テスト（エンドポイント単位）
 pnpm test:api
 
-# lint 修正 → 整形 → 型チェック → 依存構造検査（一括）
+# lint 修正 → 整形 → 型チェック（Effect 診断込み）→ 依存構造検査
 pnpm lint:fix
 
 # Drizzle Studio で DB の中身を見る
