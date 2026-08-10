@@ -52,10 +52,18 @@ pnpm db:migrate
 
 1. `src/generated/` が作られる（生成物は git 管理外なので、**clone 直後は必須**）
 2. `tsc` に Effect 診断が差し込まれる（`effect-tsgo patch --typescript`）
+3. git hook が入る（`hk install --mise`）
 
 2 のおかげで `pnpm check:types` が Effect 固有の問題も見る
 （[`00-tech-stack.md`](00-tech-stack.md#effect-固有の診断@effecttsgo)）。
-`node_modules` を作り直すたびに必要なので `prepare` に置いてある。
+3 で `git commit` のたびに検査が走るようになる
+（[`00-tech-stack.md`](00-tech-stack.md#コミット前の検査hk)）。
+
+いずれも **git 管理外のもの**（`node_modules` と `.git/`）を触るので、
+clone や `node_modules` の作り直しのたびに必要になる。だから `prepare` に置いてある。
+
+> **hk の hook には Git 2.54 以上が要る。** それ未満だと `.git/hooks/` に
+> スクリプトが書かれる形にフォールバックする（動作は同じ）。
 
 DB コンテナの起動 / 停止を pnpm スクリプトにしていない理由や、
 マイグレーションの運用は [`01-database.md`](01-database.md) にある。

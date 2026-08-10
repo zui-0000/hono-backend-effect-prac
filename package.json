@@ -17,7 +17,7 @@
     "format:fix": "oxfmt -c .oxfmtrc.jsonc",
     "lint:fix": "pnpm check:lint --fix && pnpm format:fix && pnpm check:types && pnpm check:deps",
     "generate:api": "orval",
-    "prepare": "pnpm generate:api && effect-tsgo patch --typescript",
+    "prepare": "pnpm generate:api && effect-tsgo patch --typescript && mise exec -- hk install --mise",
     "db:generate": "drizzle-kit generate --config ./drizzle.config.ts",
     "db:migrate": "bun run db/migrate.ts",
     "db:studio": "drizzle-kit studio --config ./drizzle.config.ts"

@@ -11,6 +11,7 @@
 | ORM                | Drizzle（`bun-sql` ドライバ）              |
 | Lint / Format      | oxlint / oxfmt                             |
 | Effect の静的検査  | @effect/tsgo（Effect 固有の診断）          |
+| git hook           | hk（コミット前に全検査を通す）             |
 | API スキーマ       | TypeSpec（OpenAPI 3.1 を生成）             |
 | バリデーション     | Effect Schema（orval で OpenAPI から生成） |
 | 言語               | TypeScript                                 |
@@ -50,6 +51,65 @@ pnpm は v11 から [`minimumReleaseAge`](https://pnpm.io/settings/dependency-re
 `-r` は既定でワークスペースルートを除外するので誤解のもとになる。
 
 ---
+
+## コミット前の検査（hk）
+
+CLAUDE.md に「コミット前に `lint:fix` と `test` を通す」と書いてあったが、
+**書いてあるだけでは通し忘れる**。[hk](https://hk.jdx.dev/)（mise と同じ jdx 製）で
+git hook にした。定義は [`hk.pkl`](../hk.pkl)。
+
+```text
+git commit      静的検査（lint / 整形 / 型 / 依存構造）が自動で走る 1.6 秒
+                HK=0 で 1 回だけ飛ばせる
+hk check --all  同じ検査を手動で。コミットせずに確認したいとき
+```
+
+**`--all` を忘れないこと。** 付けないとステージ済みのファイルしか見ず、
+何もステージしていなければ `no steps to run` で**何も走らずに緑**になる。
+
+**扱うのは静的検査だけ。** テストは `pnpm test` / `pnpm test:api` のまま残した。
+コミットのたびに待たされると `HK=0` が常態化する。**止まらない門番は門番ではない**ので、
+通り続けられる重さに保つ。テストは伸び続ける種類のもので、単体テストが 8 件の
+現時点で 0.4 秒でも、数百件になれば話が変わる。
+
+**`hk` に fix は持たせない。** 直すのは `pnpm lint:fix` の役目で、入口を 2 つにすると
+片方だけ直して気付かない形になる。`hk check --all` と `pnpm lint:fix` が
+「見るだけ / 直す」の対になる。
+
+**ステップを並列に走らせるのが hk を使う理由。** package.json に
+`pnpm check:lint && pnpm format:check && ...` と並べる案も測ったが、直列で 3.6 秒
+（並列は 2.1 秒）。速さもだが、`&&` は最初に落ちたところで止まるため
+**型エラーが同時にあっても見えない**。並列なら 1 回で全部出る。
+
+設定で決めたこと:
+
+- **各ステップは `pnpm ...` を呼ぶだけ。** ツールを直に叩くと同じコマンドが
+  2 箇所に散り、片方だけ直して気付かない形になる
+- **`glob` で絞らない。** 絞ると「新しい置き場を足したのに検査されない」が
+  緑のまま起きる。全部で 2.4 秒なので、忘れたとき「余計に走る」方向へ倒す
+  （テストの実行コマンドを除外形にしたのと同じ判断）
+- **`pre-commit` と `check` は同じ steps を見る。** 手元で `hk check --all` が
+  通ればコミットも通る、という関係を保つため。違うのは対象だけで、
+  `pre-commit` は `stash = "git"` で**ステージされた状態だけ**を検査する
+  （「手元では通るが、コミットされる状態では壊れている」を防ぐ）
+- **ステップは並列に走る**（既定 `jobs: 10`）。直列なら 6.0 秒かかるものが 2.0 秒。
+  1 つでも落ちればコミットは中断する（`fail_fast`）
+
+踏んだ落とし穴が 2 つある。
+
+**`hk install` には `--mise` が要る。** 付けないと hook が `hk` を素の PATH で探し、
+mise を activate していないシェル（git hook / CI / エディタの統合ターミナル）で
+`hk: command not found` になる。実際に踏んだ。`--mise` を付けると
+`mise x -- hk ...` の形で入るので PATH に依存しない。
+同じ理由で `package.json` 側も `mise exec -- hk ...` と書いてある
+（pnpm はスクリプトを `sh` で動かすため `.zshrc` の activate が効かない）。
+
+**`hk check` は既定でステージ済みのファイルしか見ない。** 何もステージしていない
+状態で叩くと `no steps to run` で**何も走らずに緑**になる。手動確認では `--all` が要る。
+pre-commit 側はステージ済みだけで正しいので、そちらは付けない。
+
+> Git 2.54 以上なら `.git/hooks/` を触らず git config（`hook.<name>.command`）に入る。
+> 他の hook マネージャと共存でき、リポジトリの中も汚れない。
 
 ## Effect 固有の診断（@effect/tsgo）
 

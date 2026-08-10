@@ -19,12 +19,19 @@ pnpm test
 # API テスト（エンドポイント単位）
 pnpm test:api
 
-# lint 修正 → 整形 → 型チェック（Effect 診断込み）→ 依存構造検査
+# 静的検査をまとめて直す（lint / 整形 / 型 + Effect 診断 / 依存構造）
 pnpm lint:fix
+
+# 同じ範囲を、直さずに確認だけする（コミット時に走るのと同じ検査）
+hk check --all
 
 # Drizzle Studio で DB の中身を見る
 pnpm db:studio
 ```
+
+**静的検査は `git commit` のたびに自動で走る**（[hk](https://hk.jdx.dev/)）。
+テストは含まないので、そちらは `pnpm test` / `pnpm test:api` を打つ。
+急ぐときは `HK=0 git commit` で 1 回だけ飛ばせる。
 
 API を変えたときは、テストだけでなく実 DB を立てて通しでも叩く。
 

@@ -1,0 +1,56 @@
+// git hook と一括検査の定義。
+//
+// mise と同じ jdx 製の hk (https://hk.jdx.dev/) で動かす。
+// 狙いは **コミット前の手順を人間の記憶から外すこと**。
+// CLAUDE.md に「コミット前に lint:fix と test を通す」と書いてあったが、
+// 書いてあるだけでは通し忘れる。
+//
+// 扱うのは**静的検査だけ**。テストは pnpm test / pnpm test:api のまま残す。
+// コミットのたびに待たされると「HK=0 で飛ばす」が常態化し、
+// **止まらない門番は門番ではない**状態になる。テストは伸び続ける種類のもの。
+//
+// 各ステップは **package.json のスクリプトを呼ぶだけ**にしてある。
+// ここでツールを直に叩くと同じコマンドが 2 箇所に散り、片方だけ直して
+// 気付かない形になる。速さより「命令が 1 箇所にある」ことを優先した。
+amends "package://github.com/jdx/hk/releases/download/v1.54.1/hk@1.54.1#/Config.pkl"
+
+// **glob で絞らない。** 絞ると「新しい置き場を足したのに検査されない」が起こり、
+// しかも緑のまま気付けない。全部走らせておけば、忘れたときに「余計に走る」方向へ
+// 倒れる (テストの実行コマンドを除外形にしたのと同じ判断)。
+//
+// fix は持たせない。直すのは pnpm lint:fix の役目で、入口を 2 つにすると
+// 片方だけ直して気付かない形になる。
+local checks = new Mapping<String, Step> {
+    ["lint"] {
+        check = "pnpm check:lint"
+    }
+    ["format"] {
+        check = "pnpm format:check"
+    }
+    // 型 + Effect 固有の診断 (tsc に @effect/tsgo を混ぜてある)。
+    ["types"] {
+        check = "pnpm check:types"
+    }
+    // 層と境界の検査 (dependency-cruiser)。
+    ["deps"] {
+        check = "pnpm check:deps"
+    }
+}
+
+// **2 つのフックは同じ steps を見る。** 手元で `hk check --all` が通れば
+// コミットも通る、という関係を保つため。違うのは対象だけ。
+hooks {
+    // git commit で自動的に走る。ステージ済みのファイルが対象で、
+    // stash = "git" が未ステージの変更を退避する。
+    // 「手元では通るが、コミットされる状態では壊れている」を防ぐため。
+    ["pre-commit"] {
+        stash = "git"
+        steps = checks
+    }
+    // 手動実行 (`hk check --all`)。コミットせずに確認したいときに使う。
+    // **--all を忘れないこと。** 付けないとステージ済みのファイルしか見ず、
+    // 何もステージしていなければ「何も走らずに緑」になる。
+    ["check"] {
+        steps = checks
+    }
+}
