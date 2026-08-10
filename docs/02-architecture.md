@@ -176,6 +176,9 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 | `handleErrorResponse`          | presentation   | `ApplicationError` → HTTP 応答（純粋な表）      |
 | `handleFailures`               | presentation   | Effect の失敗経路 → 応答（pipeable。defect も） |
 
+成功側は `SuccessResponse`（`Ok` / `Created` / `NoContent`）が対になる。
+`handle*` の一族に入れていないのは、**失敗を直しているわけではない**から。
+
 `handleErrorResponse` と `handleFailures` は**形が違う**。前者はエラー 1 つを応答へ写す
 純粋な関数で、後者は Effect の失敗と defect をまとめて応答へ畳む pipeable
 （`handleDbFailure` と同じ立ち位置）。名詞が違うので取り違えようがない。
@@ -195,12 +198,30 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 ### 翻訳はラッパではなく pipe の段に並べる
 
 ```ts
-Effect.tryPromise(() => db.update(tUser).set({ ... }).where(...)).pipe(
-  handleDbFailure,                     // DB 例外 → RepositoryError
-  handleMailAddressDuplication(user),  // 一意制約違反 → 409
-  Effect.asVoid,
+Effect.tryPromise(() => db.update(tUser).set({ ... }).where(...))
+  .pipe(handleDbFailure) // DB 例外 → RepositoryError
+  .pipe(handleMailAddressDuplication(user)) // 一意制約違反 → 409
+  .pipe(Effect.asVoid);
+```
+
+**`.pipe()` は 1 段ずつ分ける。** `pipe(a, b, c)` と `pipe(a).pipe(b).pipe(c)` は
+まったく同じ意味だが（実測で確認済み）、カンマ区切りは**同時に渡している**ように
+見えてしまう。実際は左から順に適用される変換の連なりなので、`.` で「次へ」を
+明示するほうが読み違えない。1 行 1 変換になり、読む順と処理の順も揃う。
+
+**Schema の精製と Layer の合成は分けない。**
+
+```ts
+Schema.String.pipe(
+  Schema.minLength(1),
+  Schema.maxLength(100),
+  Schema.brand("User.Name"),
 );
 ```
+
+あちらは変換の連なりではなく、**同時に成り立つ制約の宣言**（「1 文字以上かつ
+100 文字以下かつ branded」）。並んで見えるほうが正しい。orval が生成するコードも
+この形なので、手書き側だけ分けると同じ値オブジェクトの宣言が 2 つの流儀になる。
 
 `handleDbFailure` は当初 `Effect.tryPromise` を内側に隠すラッパだった。やめた理由は、
 **汎用の翻訳だけがラッパになり、集約固有の翻訳が pipe になる**という食い違いが生まれるから。
@@ -278,12 +299,61 @@ Hono は宣言した `Variables` をチェーン先まで交差型で伝播さ�
 ログに載せられない形式なら採番で代替するため、2 箇所で呼ぶと
 **応答ヘッダとログに別々の ID が載る**。`handleWithEffect` は読むだけにしてある。
 
+### 応答は controller が組み立てる
+
+```ts
+// controller。入口が decodeInput、出口が SuccessResponse で対称になる
+const input = yield * decodeInput(CreateUserCommandInput, body);
+const id = yield * createUserCommand(input);
+return yield * SuccessResponse.Created(CreateUser201Response, { id });
+```
+
+かつては routes の `response: { status, body }` に宣言し、`handleWithEffect` が
+検証して組み立てていた。**controller 側へ移した理由は 3 つ。**
+
+**① 型で守れる範囲が広がる。** 旧: `Schema.decodeUnknown(bodySchema)(value)` は
+`unknown` を取るため、**controller の戻り値と応答スキーマが型で繋がっていなかった**
+（実測で確認。契約に無いフィールドを返しても tsc は通り、実行時に defect → 500）。
+新: 値をスキーマの `Encoded` 型で受けるので、過不足・型違い・別エンドポイントの
+スキーマ取り違えがコンパイルで止まる。
+
+**② `handleWithEffect` から 52 行が消える。** 「本文あり / 204」を表す Spec の
+union と、それを絞るためだけに存在した型述語 `isContentful` が不要になる
+（コード 121 → 69 行）。
+
+**③ controller が薄すぎる問題が解ける。** 検証済みの入力を command へ渡すだけの
+3 行から、応答の組み立てまでを持つようになる。
+
+代償は **routes.ts でステータスが 1 画面に並ばなくなる**こと。ただし
+`SuccessResponse.Ok(GetUser200Response, …)` のスキーマ名に番号が入っているので、
+controller 側では近くで読める。失うのは一覧性だけ。
+
+なお**ステータスの取り違えは型では防げない**（`Ok` を `Created` に書き換えても
+通る）。これは移行前も同じで、退化ではない。
+
+#### 応答スキーマの検証は「再検証」ではない
+
+ドメインを通っていれば要らないように見えるが、**クエリ側はドメインを経由しない**。
+`GetUserQueryService` は DB の行をそのまま返すので、値オブジェクトの検証を一度も
+通らず、長さや形式が壊れた行があればここが唯一の関所になる。
+
+加えて契約（TypeSpec）とドメインの制約は**別々に宣言されている**。いまは
+`UserName` も `GetUser200Response.name` も `1..100` だが、繋がってはいない。
+片方だけ変えても気付けるのは出口だけ。
+
+型では届かない範囲でもある。`{ name: "", mailAddress: "not-a-mail" }` は
+どちらも `string` なのでコンパイルは通り、スキーマの `minLength` と `pattern` で
+初めて弾かれる（実測済み）。
+
+---
+
 ### `shared/presentation/` は公開面と部品を分ける
 
 ```text
 shared/presentation/
 ├─ handle-with-effect.ts   入口: *-routes.ts が使う
-├─ decode-input.ts         入口: controller が使う
+├─ decode-input.ts         入口: controller が使う（入力）
+├─ success-response.ts     入口: controller が使う（出力）
 ├─ resolve-request-id.ts   入口: app.ts が使う（最外周 middleware）
 ├─ handle-not-found.ts     入口: app.ts が使う
 ├─ constants/              API が外に見せる語彙

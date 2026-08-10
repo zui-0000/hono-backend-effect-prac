@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 
-import type { CreateUserBody } from "~/generated/users";
+import { CreateUser201Response, type CreateUserBody } from "~/generated/users";
 import { decodeInput } from "~/shared/presentation/decode-input";
+import { SuccessResponse } from "~/shared/presentation/success-response";
 
 import {
   createUserCommand,
@@ -17,6 +18,7 @@ export const createUserController = ({ body }: CreateUserControllerInput) =>
   Effect.gen(function* () {
     const input = yield* decodeInput(CreateUserCommandInput, body);
 
-    const id = yield* createUserCommand(input);
-    return { id };
+    return yield* createUserCommand(input)
+      .pipe(Effect.map((id) => ({ id })))
+      .pipe(SuccessResponse.Created(CreateUser201Response));
   });

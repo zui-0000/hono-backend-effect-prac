@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import type { UpdateUserBody, UpdateUserParams } from "~/generated/users";
 import { decodeInput } from "~/shared/presentation/decode-input";
+import { SuccessResponse } from "~/shared/presentation/success-response";
 
 import {
   updateUserCommand,
@@ -26,5 +27,5 @@ export const updateUserController = ({
       id: params.id,
     });
 
-    yield* updateUserCommand(input);
+    return yield* updateUserCommand(input).pipe(SuccessResponse.NoContent);
   });

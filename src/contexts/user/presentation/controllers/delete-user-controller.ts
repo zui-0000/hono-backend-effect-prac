@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import type { DeleteUserParams } from "~/generated/users";
 import { decodeInput } from "~/shared/presentation/decode-input";
+import { SuccessResponse } from "~/shared/presentation/success-response";
 
 import {
   deleteUserCommand,
@@ -19,5 +20,5 @@ export const deleteUserController = ({ params }: DeleteUserControllerInput) =>
       id: params.id,
     });
 
-    yield* deleteUserCommand(input);
+    return yield* deleteUserCommand(input).pipe(SuccessResponse.NoContent);
   });

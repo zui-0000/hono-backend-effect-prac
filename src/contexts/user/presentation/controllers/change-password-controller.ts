@@ -5,6 +5,7 @@ import type {
   ChangePasswordParams,
 } from "~/generated/users";
 import { decodeInput } from "~/shared/presentation/decode-input";
+import { SuccessResponse } from "~/shared/presentation/success-response";
 
 import {
   changePasswordCommand,
@@ -29,5 +30,5 @@ export const changePasswordController = ({
       id: params.id,
     });
 
-    yield* changePasswordCommand(input);
+    return yield* changePasswordCommand(input).pipe(SuccessResponse.NoContent);
   });

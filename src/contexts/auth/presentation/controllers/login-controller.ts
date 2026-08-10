@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 
-import type { LoginBody } from "~/generated/auth";
+import { Login200Response, type LoginBody } from "~/generated/auth";
 import { decodeInput } from "~/shared/presentation/decode-input";
+import { SuccessResponse } from "~/shared/presentation/success-response";
 
 import {
   LoginCommandInput,
@@ -17,5 +18,7 @@ export const loginController = ({ body }: LoginControllerInput) =>
   Effect.gen(function* () {
     const input = yield* decodeInput(LoginCommandInput, body);
 
-    return yield* loginCommand(input);
+    return yield* loginCommand(input).pipe(
+      SuccessResponse.Ok(Login200Response),
+    );
   });

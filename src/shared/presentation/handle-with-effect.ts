@@ -1,6 +1,5 @@
-import { Effect, type ManagedRuntime, Schema } from "effect";
-import type { Context, Handler } from "hono";
-import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { Effect, type ManagedRuntime } from "effect";
+import type { Handler } from "hono";
 
 import type { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
@@ -15,24 +14,7 @@ import {
 } from "./handler/validate-request";
 import { verifyAuth } from "./handler/verify-bearer";
 import type { RequestIdEnv } from "./resolve-request-id";
-
-/**
- * 本文を返さない応答 (204 No Content)。
- *
- * 更新・削除系のコマンドは状態を変えるだけで値を返さない (CQRS)。
- * 契約上も 204 なので本文がなく、生成スキーマも存在しない
- * (orval は本文のない応答にはスキーマを作らない)。よって body を取らない。
- */
-type NoContentResponse = {
-  readonly status: typeof HttpStatus.NoContent;
-};
-
-/** 本文を返す応答 (200 / 201 など)。 */
-type ContentfulResponse<ResponseA, ResponseI> = {
-  readonly status: ContentfulStatusCode;
-  /** 応答ボディの契約スキーマ。request.body と同じく「HTTP のどの部分か」で命名する。 */
-  readonly body: Schema.Schema<ResponseA, ResponseI>;
-};
+import type { SuccessResponse } from "./success-response";
 
 /**
  * エンドポイントの宣言。**キーが実行の段と 1 対 1 で対応する。**
@@ -40,40 +22,19 @@ type ContentfulResponse<ResponseA, ResponseI> = {
  *   auth       → verifyAuth        （省くと認証しない）
  *   request    → validateRequest
  *   controller → controller
- *   response   → respond
+ *
+ * 応答は controller が `SuccessResponse` で組み立てて返す。ここには現れない
+ * （経緯は docs/02-architecture.md）。
  *
  * `auth` を `request` の中に入れないのは、あちらが「入力源 → スキーマ」の表で、
- * 認証だけスキーマを持たないため。混ぜると値の型が揃わない。
- * 契約の `@useAuth(BearerAuth)` と 1 対 1。
+ * 認証だけスキーマを持たないため。契約の `@useAuth(BearerAuth)` と 1 対 1。
  */
-type CommonSpec<Req extends RequestSchemas, Auth extends true | undefined> = {
+type Spec<Req extends RequestSchemas, Auth extends true | undefined, R> = {
   readonly auth?: Auth;
   readonly request: Req;
-};
-
-type NoContentSpec<
-  Req extends RequestSchemas,
-  Auth extends true | undefined,
-  R,
-> = CommonSpec<Req, Auth> & {
-  readonly response: NoContentResponse;
   readonly controller: (
     input: ControllerInput<Req, Auth>,
-  ) => Effect.Effect<void, ApplicationError, R>;
-};
-
-type ContentfulSpec<
-  A,
-  ResponseA,
-  ResponseI,
-  Req extends RequestSchemas,
-  Auth extends true | undefined,
-  R,
-> = CommonSpec<Req, Auth> & {
-  readonly response: ContentfulResponse<ResponseA, ResponseI>;
-  readonly controller: (
-    input: ControllerInput<Req, Auth>,
-  ) => Effect.Effect<A, ApplicationError, R>;
+  ) => Effect.Effect<SuccessResponse, ApplicationError, R>;
 };
 
 /**
@@ -94,13 +55,12 @@ type ContentfulSpec<
  * 応答ヘッダとログへ別々の ID が載る。
  */
 const handle =
-  <A, Req extends RequestSchemas, Auth extends true | undefined, R>(
+  <Req extends RequestSchemas, Auth extends true | undefined, R>(
     auth: Auth | undefined,
     request: Req,
     controller: (
       input: ControllerInput<Req, Auth>,
-    ) => Effect.Effect<A, ApplicationError, R>,
-    respond: (c: Context, value: A) => Effect.Effect<Response>,
+    ) => Effect.Effect<SuccessResponse, ApplicationError, R>,
   ) =>
   (
     runtime: ManagedRuntime.ManagedRuntime<
@@ -113,57 +73,37 @@ const handle =
       Effect.gen(function* () {
         const authenticated = yield* verifyAuth(c, auth);
         const validated = yield* validateRequest(c, request);
-        const value = yield* controller({
+        const responded = yield* controller({
           ...validated,
           ...authenticated,
           c,
         } as ControllerInput<Req, Auth>);
 
-        return yield* respond(c, value);
+        return responded._tag === "NoContent"
+          ? c.body(null, HttpStatus.NoContent)
+          : c.json(responded.body as object, responded.status);
       }).pipe(handleFailures(c, c.get("requestId"))),
     );
 
 /**
- * 本文ありの仕様かを判定する。
- *
- * `"body" in spec.response` を呼び出し側で直接書くと spec 全体が絞り込まれず、
- * controller の型 (void を返す版 / 値を返す版) が union のまま残ってしまう。
- * spec ごと絞るために型述語にしている。
- */
-const isContentful = <
-  A,
-  ResponseA,
-  ResponseI,
-  Req extends RequestSchemas,
-  Auth extends true | undefined,
-  R,
->(
-  spec:
-    | NoContentSpec<Req, Auth, R>
-    | ContentfulSpec<A, ResponseA, ResponseI, Req, Auth, R>,
-): spec is ContentfulSpec<A, ResponseA, ResponseI, Req, Auth, R> =>
-  "body" in spec.response;
-
-/**
  * ユースケースの Effect から HTTP ハンドラを組み立てる。
  *
- * 宣言は auth / request / response / controller の 4 つで、**実行の段と 1 対 1**。**HTTP 契約の入出力が
+ * 宣言は auth / request / controller の 3 つ。**HTTP 契約の入力が
+ * そのまま読める形**にしてある。**HTTP 契約の入出力が
  * そのまま読める形**にしてある。
  *
  * - **auth** … `true` なら Bearer を検証し、claims を controller の入力に載せる
  *   （省略した経路では `auth` が型に現れない）
  * - **request** … 検証する入力源（`RequestSchemas`）。宣言したものだけが
  *   検証され、controller に渡る
- * - **response** … `status: HttpStatus.NoContent` なら本文なし (body を受け付けない)、
- *   それ以外は body が必須 (書き忘れ・書きすぎがどちらもコンパイルエラー)
  * - **controller** … 検証済みの入力を受け取り、応答の中身を返す
  *
  * このファイルが持つのは**組み立てだけ**。入力の検証は request-validator が、
  * 失敗の翻訳と defect の受け皿は handle-failures が持つ。
  *
- * 応答ボディは返す直前に API 契約 (生成スキーマ) で検証する。
- * 契約とずれた応答はバグなので defect (orDie) として扱い、早期に気付けるようにする
- * (クライアントへは handleFailures が契約どおりの 500 に翻訳する)。
+ * 応答は controller が `SuccessResponse.Ok` などで組み立てる。契約スキーマの検証も
+ * そちらで行い、ズレは defect になる (クライアントへは handleFailures が
+ * 契約どおりの 500 を返す)。
  *
  * 戻り値は Handler ではなく「ランタイムを受け取ると Handler になる関数」。
  * Effect は R (依存) が解決されるまで実行できず、その解決を行うのが
@@ -176,39 +116,16 @@ const isContentful = <
  * 相関 ID の採番に UuidGenerator を、Bearer の検証に AccessTokenIssuer を使うため、
  * R に加えてこの 2 つも要求する。
  *
- * なお 204 側の controller を `Effect<void, ...>` としているが、これは値を返す
- * controller を弾けない (TypeScript では戻り値 void の関数型が任意の戻り値を
- * 受け入れるため)。実害はなく、204 の応答組み立てでは戻り値を捨てる。
  */
 export const handleWithEffect = <
-  A,
-  ResponseA,
-  ResponseI,
   Req extends RequestSchemas,
   R,
   Auth extends true | undefined = undefined,
 >(
-  spec:
-    | NoContentSpec<Req, Auth, R>
-    | ContentfulSpec<A, ResponseA, ResponseI, Req, Auth, R>,
+  spec: Spec<Req, Auth, R>,
 ): ((
   runtime: ManagedRuntime.ManagedRuntime<
     R | UuidGenerator | AccessTokenIssuer,
     never
   >,
-) => Handler<RequestIdEnv>) => {
-  if (isContentful(spec)) {
-    const { status, body: bodySchema } = spec.response;
-    return handle(spec.auth, spec.request, spec.controller, (c, value) =>
-      Schema.decodeUnknown(bodySchema)(value).pipe(
-        Effect.orDie,
-        Effect.map((decoded) => c.json(decoded as object, status)),
-      ),
-    );
-  }
-
-  const { status } = spec.response;
-  return handle(spec.auth, spec.request, spec.controller, (c) =>
-    Effect.succeed(c.body(null, status)),
-  );
-};
+) => Handler<RequestIdEnv>) => handle(spec.auth, spec.request, spec.controller);

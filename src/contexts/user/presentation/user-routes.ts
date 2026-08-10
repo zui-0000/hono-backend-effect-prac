@@ -4,19 +4,16 @@ import {
   ChangePasswordBody,
   ChangePasswordHeader,
   ChangePasswordParams,
-  CreateUser201Response,
   CreateUserBody,
   CreateUserHeader,
   DeleteUserHeader,
   DeleteUserParams,
-  GetUser200Response,
   GetUserHeader,
   GetUserParams,
   UpdateUserBody,
   UpdateUserHeader,
   UpdateUserParams,
 } from "~/generated/users";
-import { HttpStatus } from "~/shared/presentation/constants/http-status";
 import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
 import type { RequestIdEnv } from "~/shared/presentation/resolve-request-id";
 
@@ -49,7 +46,6 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestIdEnv> => {
     "/",
     handleWithEffect({
       request: { header: CreateUserHeader, body: CreateUserBody },
-      response: { status: HttpStatus.Created, body: CreateUser201Response },
       controller: createUserController,
     })(runtime),
   );
@@ -59,7 +55,6 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestIdEnv> => {
     handleWithEffect({
       auth: true,
       request: { header: GetUserHeader, params: GetUserParams },
-      response: { status: HttpStatus.Ok, body: GetUser200Response },
       controller: getUserController,
     })(runtime),
   );
@@ -73,7 +68,6 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestIdEnv> => {
         body: UpdateUserBody,
         params: UpdateUserParams,
       },
-      response: { status: HttpStatus.NoContent },
       controller: updateUserController,
     })(runtime),
   );
@@ -87,7 +81,6 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestIdEnv> => {
         body: ChangePasswordBody,
         params: ChangePasswordParams,
       },
-      response: { status: HttpStatus.NoContent },
       controller: changePasswordController,
     })(runtime),
   );
@@ -100,7 +93,6 @@ export const userRoutes = (runtime: UserRuntime): Hono<RequestIdEnv> => {
         header: DeleteUserHeader,
         params: DeleteUserParams,
       },
-      response: { status: HttpStatus.NoContent },
       controller: deleteUserController,
     })(runtime),
   );

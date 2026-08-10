@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 
-import type { GetUserParams } from "~/generated/users";
+import { GetUser200Response, type GetUserParams } from "~/generated/users";
 import { orNotFound } from "~/shared/application/or-not-found";
+import { SuccessResponse } from "~/shared/presentation/success-response";
 
 import { GetUserQueryService } from "../../application/get-user-query-service";
 
@@ -14,6 +15,8 @@ export const getUserController = ({ params }: GetUserControllerInput) =>
   Effect.gen(function* () {
     const getUserQueryService = yield* GetUserQueryService;
 
-    const user = yield* getUserQueryService.execute(params.id).pipe(orNotFound);
-    return { name: user.name, mailAddress: user.mailAddress };
+    return yield* getUserQueryService
+      .execute(params.id)
+      .pipe(orNotFound)
+      .pipe(SuccessResponse.Ok(GetUser200Response));
   });

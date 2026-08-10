@@ -1,15 +1,12 @@
 import { Hono } from "hono";
 
 import {
-  Login200Response,
   LoginBody,
   LoginHeader,
   LogoutHeader,
-  Refresh200Response,
   RefreshBody,
   RefreshHeader,
 } from "~/generated/auth";
-import { HttpStatus } from "~/shared/presentation/constants/http-status";
 import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
 import type { RequestIdEnv } from "~/shared/presentation/resolve-request-id";
 
@@ -32,7 +29,6 @@ export const authRoutes = (runtime: AuthRuntime): Hono<RequestIdEnv> => {
     "/login",
     handleWithEffect({
       request: { header: LoginHeader, body: LoginBody },
-      response: { status: HttpStatus.Ok, body: Login200Response },
       controller: loginController,
     })(runtime),
   );
@@ -41,7 +37,6 @@ export const authRoutes = (runtime: AuthRuntime): Hono<RequestIdEnv> => {
     "/refresh",
     handleWithEffect({
       request: { header: RefreshHeader, body: RefreshBody },
-      response: { status: HttpStatus.Ok, body: Refresh200Response },
       controller: refreshController,
     })(runtime),
   );
@@ -51,7 +46,6 @@ export const authRoutes = (runtime: AuthRuntime): Hono<RequestIdEnv> => {
     handleWithEffect({
       auth: true,
       request: { header: LogoutHeader },
-      response: { status: HttpStatus.NoContent },
       controller: logoutController,
     })(runtime),
   );

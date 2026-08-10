@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import type { AccessTokenClaims } from "~/shared/domain/access-token-issuer";
 import { decodeInput } from "~/shared/presentation/decode-input";
+import { SuccessResponse } from "~/shared/presentation/success-response";
 
 import {
   LogoutCommandInput,
@@ -26,5 +27,5 @@ export const logoutController = ({ auth }: LogoutControllerInput) =>
       sessionId: auth.sid,
     });
 
-    yield* logoutCommand(input);
+    return yield* logoutCommand(input).pipe(SuccessResponse.NoContent);
   });
