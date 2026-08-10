@@ -12,6 +12,7 @@
 | Lint / Format      | oxlint / oxfmt                             |
 | Effect の静的検査  | @effect/tsgo（Effect 固有の診断）          |
 | git hook           | hk（コミット前に全検査を通す）             |
+| コミットメッセージ | committed（Conventional Commits を強制）   |
 | API スキーマ       | TypeSpec（OpenAPI 3.1 を生成）             |
 | バリデーション     | Effect Schema（orval で OpenAPI から生成） |
 | 言語               | TypeScript                                 |
@@ -59,9 +60,10 @@ CLAUDE.md に「コミット前に `lint:fix` と `test` を通す」と書い�
 git hook にした。定義は [`hk.pkl`](../hk.pkl)。
 
 ```text
-git commit      静的検査（lint / 整形 / 型 / 依存構造）が自動で走る 1.6 秒
+git commit      pre-commit  静的検査（lint / 整形 / 型 / 依存構造）1.6 秒
+                commit-msg  メッセージが Conventional Commits か
                 HK=0 で 1 回だけ飛ばせる
-hk check --all  同じ検査を手動で。コミットせずに確認したいとき
+hk check --all  静的検査を手動で。コミットせずに確認したいとき
 ```
 
 **`--all` を忘れないこと。** 付けないとステージ済みのファイルしか見ず、
@@ -110,6 +112,31 @@ pre-commit 側はステージ済みだけで正しいので、そちらは付け
 
 > Git 2.54 以上なら `.git/hooks/` を触らず git config（`hook.<name>.command`）に入る。
 > 他の hook マネージャと共存でき、リポジトリの中も汚れない。
+
+### コミットメッセージ（committed）
+
+規約は [CLAUDE.md](../CLAUDE.md) に文章で書いてあったが、こちらも**読むだけでは守れない**。
+[committed](https://github.com/crate-ci/committed) を `commit-msg` フックに載せた。
+設定は [`committed.toml`](../committed.toml)。
+
+```text
+feat: メッセージ一覧APIを追加        ✔
+feat(auth): scope 付き               ✔
+feat(api)!: 破壊的変更               ✔  CLAUDE.md の `!` マーカーも通る
+メッセージ一覧APIを追加              ✗  type が無い
+foo: 何か                            ✗  許可されていない type（一覧を出してくれる）
+WIP: 途中 / fixup! …                 ✗
+feat: 何かを追加.                    ✗  末尾の句読点
+```
+
+**日本語向けに 4 つ切ってある。** `subject_length` / `line_length` /
+`hard_line_length` は CJK の文字幅で長さ判定が揺れるため 0（無制限）に、
+`subject_capitalized` と `imperative_subject` は英語の大文字・命令形が前提なので false。
+
+> **既知の穴: 全角の句点は検出されない。** `feat: 何かを追加。` は素通りする
+> （`subject_not_punctuated` が見るのは ASCII の `.` `!` `?` などだけ）。実測で確認済み。
+
+`hk` と同じく mise で入れているので、`mise install` すれば揃う。
 
 ## Effect 固有の診断（@effect/tsgo）
 

@@ -47,6 +47,16 @@ hooks {
         stash = "git"
         steps = checks
     }
+    // コミットメッセージが Conventional Commits に沿っているか。
+    // 規約そのものは committed.toml にある (CLAUDE.md の「コミット」節と対)。
+    // {{commit_msg_file}} は hk がメッセージの一時ファイルを渡すための変数。
+    ["commit-msg"] {
+        steps {
+            ["committed"] {
+                check = "committed --commit-file {{commit_msg_file}}"
+            }
+        }
+    }
     // 手動実行 (`hk check --all`)。コミットせずに確認したいときに使う。
     // **--all を忘れないこと。** 付けないとステージ済みのファイルしか見ず、
     // 何もステージしていなければ「何も走らずに緑」になる。
