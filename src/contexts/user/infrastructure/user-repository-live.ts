@@ -1,8 +1,6 @@
 import { eq } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
 
-import { User } from "~/contexts/user/domain/model/user";
-import { UserRepository } from "~/contexts/user/domain/user-repository";
 import { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 import { Database } from "~/shared/infrastructure/db/client";
@@ -10,6 +8,8 @@ import { SqlState } from "~/shared/infrastructure/db/error/constants/sql-state";
 import { handleDbFailure } from "~/shared/infrastructure/db/error/handle-db-failure";
 import { isSqlStateViolation } from "~/shared/infrastructure/db/error/postgres-error-reader";
 
+import { User } from "../domain/model/user";
+import { UserRepository } from "../domain/user-repository";
 import { tUser } from "./drizzle-schema";
 
 // t_user のメールアドレス一意制約 (migration が生成した制約名)。

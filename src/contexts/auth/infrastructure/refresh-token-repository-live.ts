@@ -1,14 +1,11 @@
 import { eq, sql } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
 
-import {
-  RefreshToken,
-  RevokedReason,
-} from "~/contexts/auth/domain/model/refresh-token";
-import { RefreshTokenRepository } from "~/contexts/auth/domain/refresh-token-repository";
 import { Database } from "~/shared/infrastructure/db/client";
 import { handleDbFailure } from "~/shared/infrastructure/db/error/handle-db-failure";
 
+import { RefreshToken, RevokedReason } from "../domain/model/refresh-token";
+import { RefreshTokenRepository } from "../domain/refresh-token-repository";
 import { tRefreshToken } from "./drizzle-schema";
 
 /**

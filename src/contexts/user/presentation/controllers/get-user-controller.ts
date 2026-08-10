@@ -1,8 +1,9 @@
 import { Effect } from "effect";
 
-import { GetUserQueryService } from "~/contexts/user/application/get-user-query-service";
 import type { GetUserParams } from "~/generated/users";
 import { orNotFound } from "~/shared/application/or-not-found";
+
+import { GetUserQueryService } from "../../application/get-user-query-service";
 
 type GetUserControllerInput = { params: typeof GetUserParams.Type };
 

@@ -1,11 +1,12 @@
 import { Effect } from "effect";
 
+import type { DeleteUserParams } from "~/generated/users";
+import { decodeInput } from "~/shared/presentation/decode-input";
+
 import {
   deleteUserCommand,
   DeleteUserCommandInput,
-} from "~/contexts/user/application/delete-user-command";
-import type { DeleteUserParams } from "~/generated/users";
-import { decodeInput } from "~/shared/presentation/decode-input";
+} from "../../application/delete-user-command";
 
 type DeleteUserControllerInput = { params: typeof DeleteUserParams.Type };
 

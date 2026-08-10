@@ -83,6 +83,28 @@ docs/                   # 設計と学びの記録
 
 ディレクトリは「公開 API」ではなく、**単なる置き場所**として扱う。
 
+### import 経路は「自分は相対、他人は `~/`」で分ける
+
+```ts
+// contexts/user/presentation/controllers/get-user-controller.ts
+import { decodeInput } from "~/shared/presentation/decode-input"; // 他の区画
+import { GetUserQueryService } from "../../application/get-user-query-service"; // 自分の中
+```
+
+同じファイルを指すなら `~/contexts/user/...` でも `../../application/...` でも
+**解決先は同じ**で、依存グラフは 1 ミリも変わらない（`~` は tsconfig の paths が
+`./src/*` に落とすだけ）。それでも分けるのは、**import 文を見ただけで
+コンテキスト跨ぎが目に入る**ようにするため。
+
+`~/contexts/<他>/` は跨ぎのサインで、境界ルールが見張っている経路そのもの
+（[`03-boundary-enforcement.md`](03-boundary-enforcement.md)）。自分自身を
+同じ書き方で呼んでいると、跨ぎと自己参照が見分けられない。
+
+> 2026-08-11 に 11 ファイル・13 箇所を相対へ寄せた。規約が無かったので揺れており、
+> `refresh-controller.ts` に至っては**同じモジュールを 2 本の道で import** していた
+> （バレルを置かない理由に挙げているのと同じ状態）。寄せた結果、
+> モジュール数は 95 のまま依存が 341 → 340 に減っている。
+
 ### 代わりに、エクスポート名を単体で読める形にする
 
 バレルが無いぶん、名前空間（`import * as User`）で文脈を補えない。名前自体に文脈を持たせる。

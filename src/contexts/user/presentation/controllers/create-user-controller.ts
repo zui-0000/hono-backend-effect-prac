@@ -1,11 +1,12 @@
 import { Effect } from "effect";
 
+import type { CreateUserBody } from "~/generated/users";
+import { decodeInput } from "~/shared/presentation/decode-input";
+
 import {
   createUserCommand,
   CreateUserCommandInput,
-} from "~/contexts/user/application/create-user-command";
-import type { CreateUserBody } from "~/generated/users";
-import { decodeInput } from "~/shared/presentation/decode-input";
+} from "../../application/create-user-command";
 
 type CreateUserControllerInput = { body: typeof CreateUserBody.Type };
 

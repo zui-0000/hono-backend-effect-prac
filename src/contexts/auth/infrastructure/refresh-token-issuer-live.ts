@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
 
-import { RefreshTokenIssuer } from "~/contexts/auth/domain/refresh-token-issuer";
+import { RefreshTokenIssuer } from "../domain/refresh-token-issuer";
 
 /**
  * 券に使う乱数のバイト数。256 bit。

@@ -1,11 +1,12 @@
 import { Effect } from "effect";
 
+import type { UpdateUserBody, UpdateUserParams } from "~/generated/users";
+import { decodeInput } from "~/shared/presentation/decode-input";
+
 import {
   updateUserCommand,
   UpdateUserCommandInput,
-} from "~/contexts/user/application/update-user-command";
-import type { UpdateUserBody, UpdateUserParams } from "~/generated/users";
-import { decodeInput } from "~/shared/presentation/decode-input";
+} from "../../application/update-user-command";
 
 type UpdateUserControllerInput = {
   body: typeof UpdateUserBody.Type;

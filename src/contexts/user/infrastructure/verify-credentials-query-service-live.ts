@@ -1,10 +1,10 @@
 import { Effect, Layer, Option, Schema } from "effect";
 
-import { VerifyCredentialsQueryService } from "~/contexts/user/application/verify-credentials-query-service";
 import { MailAddress } from "~/shared/domain/model/value-objects/mail-address";
 import { Password } from "~/shared/domain/model/value-objects/password";
 import { PasswordHasher } from "~/shared/domain/password-hasher";
 
+import { VerifyCredentialsQueryService } from "../application/verify-credentials-query-service";
 import { verifyUserPassword } from "../domain/model/user";
 import { UserRepository } from "../domain/user-repository";
 

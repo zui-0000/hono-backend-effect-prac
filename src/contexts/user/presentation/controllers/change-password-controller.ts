@@ -1,14 +1,15 @@
 import { Effect } from "effect";
 
-import {
-  changePasswordCommand,
-  ChangePasswordCommandInput,
-} from "~/contexts/user/application/change-password-command";
 import type {
   ChangePasswordBody,
   ChangePasswordParams,
 } from "~/generated/users";
 import { decodeInput } from "~/shared/presentation/decode-input";
+
+import {
+  changePasswordCommand,
+  ChangePasswordCommandInput,
+} from "../../application/change-password-command";
 
 type ChangePasswordControllerInput = {
   body: typeof ChangePasswordBody.Type;

@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { Effect, Layer, Option } from "effect";
 
-import { GetUserQueryService } from "~/contexts/user/application/get-user-query-service";
 import { Database } from "~/shared/infrastructure/db/client";
 import { handleDbFailure } from "~/shared/infrastructure/db/error/handle-db-failure";
 
+import { GetUserQueryService } from "../application/get-user-query-service";
 import { tUser } from "./drizzle-schema";
 
 /**
