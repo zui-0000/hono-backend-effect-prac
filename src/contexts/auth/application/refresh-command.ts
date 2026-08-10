@@ -66,7 +66,8 @@ export const refreshCommand = (
     // 1. 券そのものは保存していないので、ハッシュに直してから引く。
     const presentedHash = yield* refreshTokenIssuer
       .hash(input.refreshToken)
-      .pipe(Effect.flatMap(Schema.decode(RefreshTokenHash)), Effect.orDie);
+      .pipe(Effect.flatMap(Schema.decode(RefreshTokenHash)))
+      .pipe(Effect.orDie);
 
     const stored = yield* repository.findByTokenHash(presentedHash);
     if (Option.isNone(stored)) {

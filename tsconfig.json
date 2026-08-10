@@ -11,7 +11,14 @@
         "diagnostics": true,
         "refactors": true,
         "quickinfo": true,
-        "completions": true
+        "completions": true,
+        // unnecessaryPipeChain は「連鎖した pipe を 1 つにまとめよ」という Style ルール。
+        // このリポジトリは逆に **1 段ずつ分ける** と決めているので明示的に切る。
+        // `pipe(a, b, c)` はカンマ区切りが「同時に渡している」ように見えるが、
+        // 実際は左から順に適用される変換の連なり。読み違えを避けるため
+        // `.pipe(a).pipe(b)` に揃えた (意味は同一。docs/02-architecture.md 参照)。
+        // 正しさではなく読み味の話なので、公式の推奨と分かれても構わないと判断した。
+        "diagnosticSeverity": { "unnecessaryPipeChain": "off" }
       }
     ],
 

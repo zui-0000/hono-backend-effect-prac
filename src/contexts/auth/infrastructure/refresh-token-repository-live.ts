@@ -17,10 +17,11 @@ import { tRefreshToken } from "./drizzle-schema";
 const toDomainHead = (
   rows: readonly (typeof tRefreshToken.$inferSelect)[],
 ): Effect.Effect<Option.Option<RefreshToken>> =>
-  Option.fromNullable(rows[0]).pipe(
-    Option.map((row) => Schema.decode(RefreshToken)(row).pipe(Effect.orDie)),
-    Effect.transposeOption,
-  );
+  Option.fromNullable(rows[0])
+    .pipe(
+      Option.map((row) => Schema.decode(RefreshToken)(row).pipe(Effect.orDie)),
+    )
+    .pipe(Effect.transposeOption);
 
 /** 集約を行の形へ落とす。Encoded がそのまま insert の値になる。 */
 const toRow = (token: RefreshToken): typeof tRefreshToken.$inferInsert =>
@@ -37,9 +38,9 @@ export const RefreshTokenRepositoryLive = Layer.effect(
 
     return {
       create: (token) =>
-        Effect.tryPromise(() =>
-          db.insert(tRefreshToken).values(toRow(token)),
-        ).pipe(handleDbFailure, Effect.asVoid),
+        Effect.tryPromise(() => db.insert(tRefreshToken).values(toRow(token)))
+          .pipe(handleDbFailure)
+          .pipe(Effect.asVoid),
 
       findByTokenHash: (tokenHash) =>
         Effect.tryPromise(() =>
@@ -48,7 +49,9 @@ export const RefreshTokenRepositoryLive = Layer.effect(
             .from(tRefreshToken)
             .where(eq(tRefreshToken.tokenHash, tokenHash))
             .limit(1),
-        ).pipe(handleDbFailure, Effect.flatMap(toDomainHead)),
+        )
+          .pipe(handleDbFailure)
+          .pipe(Effect.flatMap(toDomainHead)),
 
       // 失効と発行を 1 トランザクションで行う。間で落ちるとクライアントは
       // 手元の券が使えないまま新しい券も受け取れず、再ログインしか道が無くなる
@@ -65,7 +68,9 @@ export const RefreshTokenRepositoryLive = Layer.effect(
               .where(eq(tRefreshToken.id, revoked.id));
             await tx.insert(tRefreshToken).values(toRow(issued));
           }),
-        ).pipe(handleDbFailure, Effect.asVoid),
+        )
+          .pipe(handleDbFailure)
+          .pipe(Effect.asVoid),
 
       // **セッションの行すべてを対象にする。** 既に失効している行も含めて理由を
       // revoked へ倒さないと、ローテーション済みで猶予期間内の券が生き残り、
@@ -82,7 +87,9 @@ export const RefreshTokenRepositoryLive = Layer.effect(
               revokedReason: RevokedReason.Revoked,
             })
             .where(eq(tRefreshToken.sessionId, sessionId)),
-        ).pipe(handleDbFailure, Effect.asVoid),
+        )
+          .pipe(handleDbFailure)
+          .pipe(Effect.asVoid),
     };
   }),
 );

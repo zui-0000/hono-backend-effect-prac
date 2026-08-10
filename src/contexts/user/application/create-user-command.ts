@@ -63,7 +63,8 @@ export const createUserCommand = (
     // 2. パスワードをハッシュ化 (結果は必ず妥当なので decode 失敗は defect 扱い)
     const hashedPassword = yield* passwordHasher
       .hash(input.password)
-      .pipe(Effect.flatMap(Schema.decode(UserHashedPassword)), Effect.orDie);
+      .pipe(Effect.flatMap(Schema.decode(UserHashedPassword)))
+      .pipe(Effect.orDie);
 
     // 3. User 集約を生成
     const user = yield* createUser({

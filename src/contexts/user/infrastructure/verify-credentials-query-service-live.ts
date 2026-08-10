@@ -56,11 +56,12 @@ export const VerifyCredentialsQueryServiceLive = Layer.effect(
 
           // 一致しなければ UnauthorizedError で失敗するので、none に畳む。
           // 「居ない」と「合わない」を呼び出し側から区別させないため。
-          return yield* verifyUserPassword(found.value, plainText.value).pipe(
-            Effect.as(Option.some(found.value.id)),
-            Effect.catchTag("UnauthorizedError", () => Effect.succeedNone),
-            Effect.provideService(PasswordHasher, passwordHasher),
-          );
+          return yield* verifyUserPassword(found.value, plainText.value)
+            .pipe(Effect.as(Option.some(found.value.id)))
+            .pipe(
+              Effect.catchTag("UnauthorizedError", () => Effect.succeedNone),
+            )
+            .pipe(Effect.provideService(PasswordHasher, passwordHasher));
         }),
     };
   }),

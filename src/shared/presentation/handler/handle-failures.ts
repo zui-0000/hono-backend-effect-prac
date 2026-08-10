@@ -36,15 +36,18 @@ export const handleFailures =
   <R>(
     effect: Effect.Effect<Response, ApplicationError, R>,
   ): Effect.Effect<Response, never, R> =>
-    effect.pipe(
-      Effect.catchAll((error) => {
-        const response = handleErrorResponse(error);
-        return logFailure(c, requestId, response.status, error).pipe(
-          Effect.map(() => c.json(response.body, response.status)),
-        );
-      }),
-      Effect.tapDefect((cause) => logDefect(c, requestId, cause)),
-      Effect.catchAllDefect(() =>
-        Effect.succeed(c.json(defectResponse.body, defectResponse.status)),
-      ),
-    );
+    effect
+      .pipe(
+        Effect.catchAll((error) => {
+          const response = handleErrorResponse(error);
+          return logFailure(c, requestId, response.status, error).pipe(
+            Effect.map(() => c.json(response.body, response.status)),
+          );
+        }),
+      )
+      .pipe(Effect.tapDefect((cause) => logDefect(c, requestId, cause)))
+      .pipe(
+        Effect.catchAllDefect(() =>
+          Effect.succeed(c.json(defectResponse.body, defectResponse.status)),
+        ),
+      );

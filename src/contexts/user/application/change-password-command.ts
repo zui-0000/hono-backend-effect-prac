@@ -62,7 +62,8 @@ export const changePasswordCommand = (
     // 3. 新しいパスワードをハッシュ化 (結果は必ず妥当なので decode 失敗は defect 扱い)
     const hashedPassword = yield* passwordHasher
       .hash(input.newPassword)
-      .pipe(Effect.flatMap(Schema.decode(UserHashedPassword)), Effect.orDie);
+      .pipe(Effect.flatMap(Schema.decode(UserHashedPassword)))
+      .pipe(Effect.orDie);
 
     // 4. 集約の状態遷移 (元の user は書き換わらない)
     const updated = yield* changeUserPassword(user, hashedPassword);

@@ -27,10 +27,9 @@ export const GetUserQueryServiceLive = Layer.effect(
             .from(tUser)
             .where(eq(tUser.id, id))
             .limit(1),
-        ).pipe(
-          handleDbFailure,
-          Effect.map((rows) => Option.fromNullable(rows[0])),
-        ),
+        )
+          .pipe(handleDbFailure)
+          .pipe(Effect.map((rows) => Option.fromNullable(rows[0]))),
     };
   }),
 );

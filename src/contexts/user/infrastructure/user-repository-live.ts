@@ -49,10 +49,9 @@ const handleMailAddressDuplication =
 const toDomainHead = (
   rows: readonly (typeof tUser.$inferSelect)[],
 ): Effect.Effect<Option.Option<User>> =>
-  Option.fromNullable(rows[0]).pipe(
-    Option.map((row) => Schema.decode(User)(row).pipe(Effect.orDie)),
-    Effect.transposeOption,
-  );
+  Option.fromNullable(rows[0])
+    .pipe(Option.map((row) => Schema.decode(User)(row).pipe(Effect.orDie)))
+    .pipe(Effect.transposeOption);
 
 /**
  * UserRepository の Drizzle 実装 (アダプタ)。
@@ -75,11 +74,10 @@ export const UserRepositoryLive = Layer.effect(
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
           }),
-        ).pipe(
-          handleDbFailure,
-          handleMailAddressDuplication(user),
-          Effect.asVoid,
-        ),
+        )
+          .pipe(handleDbFailure)
+          .pipe(handleMailAddressDuplication(user))
+          .pipe(Effect.asVoid),
 
       // set に並べるのは「その遷移が変える項目」だけ。触らない列を書き戻さないことが
       // 分けた理由そのものなので、ここに項目を足すときはポートの doc を読むこと。
@@ -93,11 +91,10 @@ export const UserRepositoryLive = Layer.effect(
               updatedAt: user.updatedAt,
             })
             .where(eq(tUser.id, user.id)),
-        ).pipe(
-          handleDbFailure,
-          handleMailAddressDuplication(user),
-          Effect.asVoid,
-        ),
+        )
+          .pipe(handleDbFailure)
+          .pipe(handleMailAddressDuplication(user))
+          .pipe(Effect.asVoid),
 
       // メールアドレスを書かないので一意制約違反は起こりえない (翻訳を積まない)。
       updatePassword: (user) =>
@@ -109,12 +106,16 @@ export const UserRepositoryLive = Layer.effect(
               updatedAt: user.updatedAt,
             })
             .where(eq(tUser.id, user.id)),
-        ).pipe(handleDbFailure, Effect.asVoid),
+        )
+          .pipe(handleDbFailure)
+          .pipe(Effect.asVoid),
 
       findById: (id) =>
         Effect.tryPromise(() =>
           db.select().from(tUser).where(eq(tUser.id, id)).limit(1),
-        ).pipe(handleDbFailure, Effect.flatMap(toDomainHead)),
+        )
+          .pipe(handleDbFailure)
+          .pipe(Effect.flatMap(toDomainHead)),
 
       findByMailAddress: (mailAddress) =>
         Effect.tryPromise(() =>
@@ -123,13 +124,14 @@ export const UserRepositoryLive = Layer.effect(
             .from(tUser)
             .where(eq(tUser.mailAddress, mailAddress))
             .limit(1),
-        ).pipe(handleDbFailure, Effect.flatMap(toDomainHead)),
+        )
+          .pipe(handleDbFailure)
+          .pipe(Effect.flatMap(toDomainHead)),
 
       deleteById: (id) =>
-        Effect.tryPromise(() => db.delete(tUser).where(eq(tUser.id, id))).pipe(
-          handleDbFailure,
-          Effect.asVoid,
-        ),
+        Effect.tryPromise(() => db.delete(tUser).where(eq(tUser.id, id)))
+          .pipe(handleDbFailure)
+          .pipe(Effect.asVoid),
     };
   }),
 );
