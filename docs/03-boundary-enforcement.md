@@ -165,3 +165,22 @@ dependency-cruiser 同梱の tsc パーサーは `typescript@>=2 <7` しか対�
 実行時に出る `missing-typescript-transpiler` 警告はこの構成に由来する既知のもので、
 解析自体は swc が完遂しており実害はない（終了コードも 0）。
 消す手段は検討したうえで見送っている（詳細は `.dependency-cruiser.mjs` のコメント）。
+
+> **2026-08-12 に取りこぼしが無いことを実測した。** 警告は
+> 「TypeScript のソースと依存を取りこぼしているかもしれない」と言うため、
+> `--output-type json` の結果と `find src -name "*.ts"` を突き合わせた。
+>
+> ```
+> src の .ts ファイル        107
+> depcruise が見たモジュール  100
+> 見られていないファイル       16  ← 全部テストとモック（除外設定どおり）
+> ```
+>
+> 実コード 91 + 外部モジュールで 100。**取りこぼしはゼロ。**
+>
+> あわせて上流も確認した。この警告は dependency-cruiser **18.1.0 で追加された**もので
+> （`feat: adds environment inconsistency checks` #1070）、前から壊れていたわけではなく
+> 警告を出すようになっただけ。18.2.0 でも消えず、メッセージ自身が
+> `Support for typescript@>=7 will follow when its API is published and stable` と述べている。
+> **上流が TypeScript 7 の API 安定を待っている**状態なので、こちらから消せるものではない。
+> 着手の引き金は dependency-cruiser が TypeScript 7 に対応すること。

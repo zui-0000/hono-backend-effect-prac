@@ -104,11 +104,9 @@ export type RequestSchemas = {
  * コンパイルエラーになる。
  */
 export type ValidatedRequest<Req extends RequestSchemas> = {
-  readonly [K in keyof Req as Req[K] extends Schema.Schema.AnyNoContext
-    ? K
-    : never]: Req[K] extends Schema.Schema<infer A, infer _I, never>
-    ? A
-    : never;
+  readonly [
+    K in keyof Req as Req[K] extends Schema.Schema.AnyNoContext ? K : never
+  ]: Req[K] extends Schema.Schema<infer A, infer _I, never> ? A : never;
 };
 
 /**
