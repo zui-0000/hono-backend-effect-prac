@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
 
 import { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
@@ -12,8 +12,9 @@ import { User } from "../domain/model/user";
 import { UserRepository } from "../domain/user-repository";
 import { tUser } from "./drizzle-schema";
 
-// t_user のメールアドレス一意制約 (migration が生成した制約名)。
-const MAIL_ADDRESS_UNIQUE_CONSTRAINT = "t_user_mail_address_unique";
+// t_user のメールアドレス一意索引 (migration が生成した名前)。
+// 列ではなく lower(mail_address) に張ってあるため、名前も _lower_ を含む。
+const MAIL_ADDRESS_UNIQUE_CONSTRAINT = "t_user_mail_address_lower_unique";
 
 /**
  * 一意制約違反を MailAddressAlreadyExistsError (409) に翻訳する。
@@ -117,12 +118,16 @@ export const UserRepositoryLive = Layer.effect(
           .pipe(handleDbFailure)
           .pipe(Effect.flatMap(toDomainHead)),
 
+      // 大小を無視して引く。保存は入力どおりなので eq では
+      // Taro.Yamada@... と taro.yamada@... が別物になり、本人を見つけられない。
+      // 比較の形は drizzle-schema の一意索引 lower(mail_address) と揃えてある
+      // (揃っていないと索引が使われず全表走査になる)。
       findByMailAddress: (mailAddress) =>
         Effect.tryPromise(() =>
           db
             .select()
             .from(tUser)
-            .where(eq(tUser.mailAddress, mailAddress))
+            .where(sql`lower(${tUser.mailAddress}) = lower(${mailAddress})`)
             .limit(1),
         )
           .pipe(handleDbFailure)

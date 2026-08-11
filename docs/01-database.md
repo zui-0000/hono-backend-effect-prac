@@ -115,10 +115,84 @@ src/contexts/<context>/infrastructure/
 | --------------- | ------------ | ----------------------------------------------------- |
 | id              | uuid         | PRIMARY KEY（**DB DEFAULT なし** = アプリ側採番）     |
 | name            | varchar(100) | NOT NULL                                              |
-| mail_address    | varchar(255) | NOT NULL, UNIQUE                                      |
+| mail_address    | varchar(255) | NOT NULL（一意性は下記の関数インデックス）            |
 | hashed_password | text         | NOT NULL（パスワードのハッシュ。argon2id 想定）       |
 | created_at      | timestamptz  | NOT NULL, DEFAULT now()                               |
 | updated_at      | timestamptz  | NOT NULL, DEFAULT now()（更新はアプリ側 `$onUpdate`） |
+
+### メールアドレスの一意性は `lower()` に張る
+
+```sql
+CREATE UNIQUE INDEX "t_user_mail_address_lower_unique" ON "t_user" USING btree (lower("mail_address"));
+```
+
+列に `UNIQUE` を張るとバイト比較になり、`Taro.Yamada@example.co.jp` と
+`taro.yamada@example.co.jp` が**別人として両方登録できてしまう**。実運用では同一人物なので、
+同じ人が 2 アカウントを持ち、前に使った大小を忘れるとログインできない。
+
+かといって**アプリ側で小文字へ潰すのも選ばなかった**。潰すと利用者が名乗った表記を
+復元できず、将来このアドレスへメールを送るとき、届くかどうかを受信サーバの設定に賭ける
+ことになる（RFC 5321 §2.4 はドメイン部を大小無視と定める一方、ローカル部については
+SMTP 実装に `MUST take care to preserve the case of mailbox local-parts` と要求している）。
+
+**保存は入力どおり・一意判定だけ大小無視**が、両方を満たす唯一の形だった。
+判断の経緯は契約側の [`schema/src/shared/model/MailAddress.tsp`](../schema/src/shared/model/MailAddress.tsp) に残してある。
+見送った案は「表示用と正規化用で列を分ける」で、2 列の同期という責務が増えるため却下した。
+
+**検索も同じ形で書くこと。** `lower(mail_address) = lower($1)` と書けばこの索引が使われるが、
+`mail_address = $1` に戻すと索引に一致せず全表走査になる（`EXPLAIN` で確認済み）。
+
+```
+lower(mail_address) = lower(...)  → Index Scan using t_user_mail_address_lower_unique
+mail_address = ...                → Seq Scan
+```
+
+一意性は索引が保証するので、`lower()` を書き忘れても**重複データは作れない**。
+起きるのは「検索がヒットしない」という気付きやすい壊れ方のほう。
+
+#### collation で解決しなかった理由
+
+MySQL ならこの問題は存在しない。照合順序の接尾辞が挙動を決めていて、`_ci`
+(case insensitive) の列に素の `UNIQUE KEY` を張るだけで済む。しかも 8.0 の既定が
+`utf8mb4_0900_ai_ci` なので、**何もしなくてもそうなる**（むしろ大小を区別するほうが
+`_bin` の明示を要する）。ただし `_ai` はアクセントも同一視するため、
+`resume@x.com` と `résumé@x.com` が衝突する点は別途注意が要る。
+
+**Postgres にも同等のものはある。** 12 以降の nondeterministic ICU collation で、
+18.4 で実際に試したところ MySQL の `_ci` と同じ挙動になった。
+
+```sql
+CREATE COLLATION case_insensitive (provider = icu, locale = 'und-u-ks-level2', deterministic = false);
+CREATE TABLE t (mail varchar(255) COLLATE case_insensitive NOT NULL UNIQUE);
+```
+
+| 確認項目                  | 結果                                   |
+| ------------------------- | -------------------------------------- |
+| 保存される値              | 入力どおり                             |
+| 素の `=` で大小違いを検索 | ヒットする（**`lower()` 不要**）       |
+| 素の `UNIQUE` で重複      | 弾く                                   |
+| `LIKE '%EXAMPLE%'`        | 効く（大小無視）                       |
+| アクセント                | 区別する（MySQL の `_ai_ci` より安全） |
+
+`lower()` の書き忘れという唯一の弱点が消えるので魅力的だが、**採らなかった**。
+
+決め手は性能ではなく **Drizzle が表現できないこと**。`drizzle-orm` の `varchar` に
+collation の指定は無く（`pg-core` 全体で collation を扱う箇所が無い）、`drizzle-kit` も
+`CREATE COLLATION` を生成しない。手書きマイグレーションで当てることはできるが、
+スキーマ定義と DB の実体がずれ、`db:generate` のたびに差分の扱いに悩むことになる。
+
+性能も測った（200,000 行 INSERT / 10,000 回検索、順序を入れ替えて再現確認）。
+
+| 方式                      | INSERT 20 万行 | 検索 1 万回 | 索引サイズ |
+| ------------------------- | -------------- | ----------- | ---------- |
+| 素の UNIQUE（大小を区別） | 850 ms         | 31 ms       | 17 MB      |
+| **`lower()` 関数索引**    | 884 ms         | 95 ms       | 17 MB      |
+| ci collation              | 475 ms         | 202 ms      | 17 MB      |
+
+読みは関数索引が collation の 2 倍速く、書きは逆に collation が倍近く速い。
+ただし 1 回あたりの差は 10µs 前後で、**ログイン 1 回の実測 70.9ms の 0.03%**。
+ログインは argon2id のハッシュ計算が支配的（それが仕事）なので、
+どちらを選んでも体感には出ない。**性能は判断材料にならなかった。**
 
 ---
 

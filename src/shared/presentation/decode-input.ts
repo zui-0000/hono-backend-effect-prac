@@ -11,8 +11,18 @@ import { ErrorMessage } from "./constants/error-message";
  *
  * **この層で唯一、controller が直接呼ぶもの。** 検証済みの入力を合成して
  * ユースケースの入力（値オブジェクト）へ変換する用途で使う。
- * 変換に見えるが、戻り値が `Effect<A, BadRequestError>` であるとおり
- * 「組み立てた値がコマンド入力スキーマを満たすか」を検証している。
+ * 戻り値が `Effect<A, BadRequestError>` であるとおり検証も兼ねるが、
+ * **実際に効いているのは変換のほう**。契約スキーマとコマンド入力スキーマは
+ * 制約が一致しているため（長さも正規表現も同値。実測で確認）、
+ * `validateRequest` を通った値がここで 400 になることは今のところ無い。
+ *
+ * それでも省けない。branded 型は decode を通らないと得られないため
+ * （省くと `Type 'string' is not assignable to type 'string & Brand<"User.Id">'`)、
+ * ユースケースへ値を渡す道がここしか無い。
+ *
+ * 制約の二重定義は意図したもの。`shared/domain` は `~/generated` を参照できない
+ * （lint で禁止）ので、ドメインは契約を信用せず自分で制約を宣言する。
+ * 契約が緩められたとき、ここが最後の砦になる。
  *
  * `handler/validate-request.ts` の `validate*` はこれの薄い上乗せで、
  * 「HTTP のどこから値を取り出すか」だけが違う。

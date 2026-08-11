@@ -494,7 +494,7 @@ components:
       type: string
       maxLength: 255
       pattern: ^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$
-      description: メールアドレス (RFC 5322準拠)
+      description: メールアドレス (RFC 5322準拠)。大文字小文字は区別せず同一のアドレスとして扱うが、送った表記はそのまま保存され、そのまま返る
       title: MailAddress
       examples:
         - user@example.com
