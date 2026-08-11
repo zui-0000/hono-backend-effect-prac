@@ -34,9 +34,9 @@ model ConflictErrorResponse {
 }
 
 /** メールアドレスが既に使用されている */
-model MailAddressAlreadyExistsErrorResponse {
+model MailAddressDuplicationErrorResponse {
   @statusCode statusCode: 409;
-  @body error: MailAddressAlreadyExistsError;
+  @body error: MailAddressDuplicationError;
 }
 
 /** サーバーエラー (汎用) */

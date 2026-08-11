@@ -76,8 +76,8 @@ describe(createUserController.name, () => {
 
       expect(response.status).toBe(HttpStatus.Conflict);
       expect(await response.json()).toStrictEqual({
-        errorCode: ErrorCode.MailAddressAlreadyExists,
-        message: ErrorMessage.MailAddressAlreadyExists,
+        errorCode: ErrorCode.MailAddressDuplication,
+        message: ErrorMessage.MailAddressDuplication,
       });
       // 409 を返しつつ書き込みも走っていた、が起こりうる。応答だけでは見えない。
       expect(created).toStrictEqual([]);

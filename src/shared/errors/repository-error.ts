@@ -12,7 +12,7 @@ import { Data } from "effect";
  * 得るものが無い。将来リトライを入れて振る舞いが分岐したら、そのとき型を検討する。
  *
  * 制約違反 (23xxx) はここに含めない。あれは業務ルールの違反が DB で顕在化したもので、
- * MailAddressAlreadyExistsError のようにドメインのエラーへ翻訳する
+ * MailAddressDuplicationError のようにドメインのエラーへ翻訳する
  * (インフラの調子と客の入力を同じ軸に並べない)。
  */
 export const RepositoryFailure = {

@@ -10,7 +10,7 @@ import { Data } from "effect";
  * presentation の定数を import する理由も無くなる。
  *
  * 「どのリソースが」を伝えたい場合は、まず契約 (TypeSpec) に固有の errorCode を
- * 足す (Conflict "4090" に対する MailAddressAlreadyExists "4091" と同じやり方)。
+ * 足す (Conflict "4090" に対する MailAddressDuplication "4091" と同じやり方)。
  */
 export class ResourceNotFoundError extends Data.TaggedError(
   "ResourceNotFoundError",

@@ -195,7 +195,7 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 | 名前                                | 層             | 何を何に直すか                                  |
 | ----------------------------------- | -------------- | ----------------------------------------------- |
 | `handleDbError`                     | infrastructure | DB 例外 → `RepositoryError`                     |
-| `handleMailAddressDuplicationError` | infrastructure | 一意制約違反 → `MailAddressAlreadyExistsError`  |
+| `handleMailAddressDuplicationError` | infrastructure | 一意制約違反 → `MailAddressDuplicationError`    |
 | `handleErrorResponse`               | presentation   | `ApplicationError` → HTTP 応答（純粋な表）      |
 | `handleFailures`                    | presentation   | Effect の失敗経路 → 応答（pipeable。defect も） |
 
@@ -241,6 +241,20 @@ Effect の `Cause = Fail | Die` にそのまま対応している。
 `handleMailAddressDuplicationError` はドメインサービスの `checkMailAddressDuplication` と
 **名詞を揃えてある**。動詞だけが違う（書く前に確かめる / すり抜けたものを捕まえる）ので、
 二段構えの設計が名前だけで読める。
+
+**エラー型も同じ名詞にした**（`MailAddressDuplicationError`）。
+
+```text
+checkMailAddressDuplication          ドメインサービス（書く前に確かめる）
+handleMailAddressDuplicationError    infrastructure（すり抜けたものを捕まえる）
+MailAddressDuplicationError          エラー型（外へ伝える）
+```
+
+かつては `MailAddressAlreadyExistsError` だった。gRPC の `ALREADY_EXISTS` や
+Google の API 設計ガイドが使う定番の語彙で、**それ単体では悪くない**。
+それでも揃えたのは、**1 つの事象に 2 つの名詞があると、どちらで検索すべきか毎回迷う**から。
+契約側（TypeSpec のモデル名）も変わるが、`errorCode` は `4091` のままなので
+クライアントが分岐に使う値は動かない。2026-08-11 に改めた。
 
 ### 翻訳はラッパではなく pipe の段に並べる
 
@@ -442,7 +456,7 @@ controller が `validate*` を直接呼べば**同じ検証が二度走る**。
 
 > 検討の過程で分かったこと: **この種のコードは契約 (TypeSpec) に置けない。**
 > どの操作の応答でもないため、モデルを足しても参照されず、OpenAPI に出力されない
-> （実測で確認。参照されている `MailAddressAlreadyExistsError` は 5 箇所に出る）。
+> （実測で確認。参照されている `MailAddressDuplicationError` は 5 箇所に出る）。
 > 仮に足すなら値の登録簿は `constants/error-code.ts` だけになる、という非対称が生じる。
 > これも見送りの理由の 1 つ。
 
@@ -819,7 +833,7 @@ changeUserPassword  → updatePassword   （hashedPassword / updatedAt を書く
 ### 一意性は事前チェックと DB 制約の二段構えで守る
 
 `checkMailAddressDuplication`（ドメインサービス）と、`UserRepositoryLive` の `handleMailAddressDuplicationError`
-（一意制約違反 → `MailAddressAlreadyExistsError`）は**どちらも 409 を出す**。
+（一意制約違反 → `MailAddressDuplicationError`）は**どちらも 409 を出す**。
 重複に見えるが、**役割が違うので両方要る**。
 
 |                                     | 役割                                     | いつ効くか        |
@@ -848,7 +862,7 @@ changeUserPassword  → updatePassword   （hashedPassword / updatedAt を書く
   ドメインを読んでも「同じメールアドレスの人は 2 人いない」が分からなくなる。
   加えて、重複と分かるまでに毎回 argon2id を焼くことになる。
 
-なお `updatePassword` の `E` に `MailAddressAlreadyExistsError` が無いのは、
+なお `updatePassword` の `E` に `MailAddressDuplicationError` が無いのは、
 あれがメールアドレスを書かないため。触らない列の制約違反は起こりえない。
 書き込みポートを状態遷移ごとに分けた効果がここにも出ている。
 

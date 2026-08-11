@@ -7,8 +7,8 @@ import type { MailAddress } from "~/shared/domain/model/value-objects/mail-addre
  * 「アプリ側の事前チェック」と「DB の unique 制約 (最後の砦)」の二段構えで検出し、
  * どちらの経路でもこのエラーに翻訳する。
  */
-export class MailAddressAlreadyExistsError extends Data.TaggedError(
-  "MailAddressAlreadyExistsError",
+export class MailAddressDuplicationError extends Data.TaggedError(
+  "MailAddressDuplicationError",
 )<{
   readonly mailAddress: MailAddress;
 }> {}

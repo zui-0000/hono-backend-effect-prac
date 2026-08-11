@@ -10,7 +10,7 @@
  * 「ユーザーが見つかりません」のような固有の文言を持たせない — 汎用と言いながら
  * 中身が固有だと、コンテキストごとに文言を抱えることになる。
  * 固有の説明が要るなら、まず契約 (TypeSpec) に固有の errorCode を足す
- * (Conflict "4090" に対する MailAddressAlreadyExists "4091" と同じやり方)。
+ * (Conflict "4090" に対する MailAddressDuplication "4091" と同じやり方)。
  *
  * 内部で何が起きたかは logFailure がサーバーログに残すので、ここは
  * 外部に見せてよい定型文だけにする (原因は露出させない)。
@@ -26,7 +26,7 @@ export const ErrorMessage = {
   Forbidden: "この操作を行う権限がありません",
   NotFound: "指定されたリソースは存在しません",
   /** 409 メールアドレスの重複 */
-  MailAddressAlreadyExists: "メールアドレスが既に使用されています",
+  MailAddressDuplication: "メールアドレスが既に使用されています",
   /** 500 想定外の失敗 (原因はログにのみ残す) */
   InternalServerError: "サーバーで予期せぬエラーが発生しました",
 } as const;

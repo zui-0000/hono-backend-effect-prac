@@ -4,7 +4,7 @@ import { MailAddress } from "~/shared/domain/model/value-objects/mail-address";
 import { Password } from "~/shared/domain/model/value-objects/password";
 import { PasswordHasher } from "~/shared/domain/password-hasher";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
-import type { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
+import type { MailAddressDuplicationError } from "~/shared/errors/mail-address-duplication-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 
 import { createUser } from "../domain/model/user";
@@ -50,7 +50,7 @@ export const createUserCommand = (
   input: CreateUserCommandInput,
 ): Effect.Effect<
   CreateUserCommandOutput,
-  MailAddressAlreadyExistsError | RepositoryError,
+  MailAddressDuplicationError | RepositoryError,
   UserRepository | PasswordHasher | UuidGenerator
 > =>
   Effect.gen(function* () {

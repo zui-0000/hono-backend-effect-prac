@@ -24,7 +24,7 @@ export const ErrorCode = {
   /** 409 リソースの現在の状態と衝突する (汎用) */
   Conflict: "4090",
   /** 409 メールアドレスが既に使用されている */
-  MailAddressAlreadyExists: "4091",
+  MailAddressDuplication: "4091",
   /** 500 サーバー内部で予期せぬエラーが発生した (汎用) */
   InternalServerError: "5000",
 } as const;

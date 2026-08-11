@@ -469,7 +469,7 @@ DB 呼び出しを包む処理のうち、コンテキストに依存しない
 後者は同じ中身を手で書き直していたため、**既にあった重複を消す**変更でもあった。
 
 `UserRepositoryLive` に残した `handleMailAddressDuplicationError` は出していない。制約名
-（`t_user_mail_address_unique`）、翻訳先（`MailAddressAlreadyExistsError`）、
+（`t_user_mail_address_unique`）、翻訳先（`MailAddressDuplicationError`）、
 引数（`user.mailAddress` を読むためだけの `User`）の**すべてが user 固有**だから。
 
 一般化するなら「制約 → ドメインエラー」の対応表を渡す形になるが、

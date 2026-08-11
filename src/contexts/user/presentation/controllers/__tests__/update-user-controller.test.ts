@@ -119,8 +119,8 @@ describe(updateUserController.name, () => {
 
       expect(response.status).toBe(HttpStatus.Conflict);
       expect(await response.json()).toStrictEqual({
-        errorCode: ErrorCode.MailAddressAlreadyExists,
-        message: ErrorMessage.MailAddressAlreadyExists,
+        errorCode: ErrorCode.MailAddressDuplication,
+        message: ErrorMessage.MailAddressDuplication,
       });
       expect(updated).toStrictEqual([]);
     });

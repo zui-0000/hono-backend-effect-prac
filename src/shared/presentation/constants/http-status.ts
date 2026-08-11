@@ -3,7 +3,7 @@
  *
  * `errorCode` 体系 (`./error-code.ts`) と対になる。
  * errorCode が `<HTTP ステータス><連番>` の 4 桁なので、両者を並べると
- * 対応が読める (例: `HttpStatus.Conflict` ↔ `ErrorCode.MailAddressAlreadyExists` = "4091")。
+ * 対応が読める (例: `HttpStatus.Conflict` ↔ `ErrorCode.MailAddressDuplication` = "4091")。
  *
  * `as const` を付けているのはリテラル型を保つため。`HttpStatus.NoContent` が
  * `number` に広がると、本文なし応答を表す判別可能ユニオン

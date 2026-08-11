@@ -21,7 +21,7 @@ namespace BackendApi {
     op create(...CommonHeaders, @body body: CreateUserRequest):
       | SuccessCreatedResponse<CreateUserResponse>
       | BadRequestErrorResponse
-      | MailAddressAlreadyExistsErrorResponse
+      | MailAddressDuplicationErrorResponse
       | InternalServerErrorResponse;
 
     /** IDを指定してユーザーを取得する (要認証) */
@@ -52,7 +52,7 @@ namespace BackendApi {
       | UnauthorizedErrorResponse
       | ForbiddenErrorResponse
       | NotFoundErrorResponse
-      | MailAddressAlreadyExistsErrorResponse
+      | MailAddressDuplicationErrorResponse
       | InternalServerErrorResponse;
 
     /** ユーザーを削除する (要認証) */

@@ -140,7 +140,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MailAddressAlreadyExistsError'
+                $ref: '#/components/schemas/MailAddressDuplicationError'
         '500':
           description: サーバーエラー (汎用)
           content:
@@ -249,7 +249,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MailAddressAlreadyExistsError'
+                $ref: '#/components/schemas/MailAddressDuplicationError'
         '500':
           description: サーバーエラー (汎用)
           content:
@@ -537,7 +537,7 @@ components:
       title: MailAddress
       examples:
         - user@example.com
-    MailAddressAlreadyExistsError:
+    MailAddressDuplicationError:
       type: object
       required:
         - errorCode
@@ -548,10 +548,10 @@ components:
         message:
           $ref: '#/components/schemas/ErrorMessage'
       description: メールアドレスが既に使用されている
-      title: MailAddressAlreadyExistsError
+      title: MailAddressDuplicationError
       examples:
         - errorCode: '4091'
-          message: MailAddressAlreadyExistsError
+          message: MailAddressDuplicationError
     Password:
       type: string
       minLength: 12

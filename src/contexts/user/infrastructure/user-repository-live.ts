@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
 
-import { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
+import { MailAddressDuplicationError } from "~/shared/errors/mail-address-duplication-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 import { Database } from "~/shared/infrastructure/db/database-client";
 import { SqlState } from "~/shared/infrastructure/db/error/constants/sql-state";
@@ -17,7 +17,7 @@ import { tUser } from "./drizzle-schema";
 const MAIL_ADDRESS_UNIQUE_CONSTRAINT = "t_user_mail_address_lower_unique";
 
 /**
- * 一意制約違反を MailAddressAlreadyExistsError (409) に翻訳する。
+ * 一意制約違反を MailAddressDuplicationError (409) に翻訳する。
  * handleDbError の上に pipe で積んで使う (翻訳の段数がそのまま並ぶ)。
  *
  * アプリ側の事前チェックをすり抜けた同時実行 (TOCTOU) を DB の制約が捕まえる
@@ -28,7 +28,7 @@ const handleMailAddressDuplicationError =
   (user: User) =>
   <A, R>(
     effect: Effect.Effect<A, RepositoryError, R>,
-  ): Effect.Effect<A, MailAddressAlreadyExistsError | RepositoryError, R> =>
+  ): Effect.Effect<A, MailAddressDuplicationError | RepositoryError, R> =>
     effect.pipe(
       Effect.catchIf(
         (error) =>
@@ -38,7 +38,7 @@ const handleMailAddressDuplicationError =
             MAIL_ADDRESS_UNIQUE_CONSTRAINT,
           ),
         () =>
-          new MailAddressAlreadyExistsError({ mailAddress: user.mailAddress }),
+          new MailAddressDuplicationError({ mailAddress: user.mailAddress }),
       ),
     );
 

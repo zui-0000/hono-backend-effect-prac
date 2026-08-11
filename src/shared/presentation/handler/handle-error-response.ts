@@ -4,7 +4,7 @@ import type { BadRequestError } from "~/shared/errors/bad-request-error";
 import type { ConflictError } from "~/shared/errors/conflict-error";
 import type { ErrorDetail } from "~/shared/errors/error-detail";
 import type { ForbiddenError } from "~/shared/errors/forbidden-error";
-import type { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
+import type { MailAddressDuplicationError } from "~/shared/errors/mail-address-duplication-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 import type { ResourceNotFoundError } from "~/shared/errors/resource-not-found-error";
 import type { UnauthorizedError } from "~/shared/errors/unauthorized-error";
@@ -31,7 +31,7 @@ export type ApplicationError =
   | ResourceNotFoundError
   // 409
   | ConflictError
-  | MailAddressAlreadyExistsError
+  | MailAddressDuplicationError
   // 500
   | RepositoryError;
 
@@ -155,12 +155,12 @@ export const handleErrorResponse = (
       };
 
     // ---- 409 Conflict (メールアドレスの重複) ----
-    case "MailAddressAlreadyExistsError":
+    case "MailAddressDuplicationError":
       return {
         status: HttpStatus.Conflict,
         body: errorBody({
-          errorCode: ErrorCode.MailAddressAlreadyExists,
-          message: ErrorMessage.MailAddressAlreadyExists,
+          errorCode: ErrorCode.MailAddressDuplication,
+          message: ErrorMessage.MailAddressDuplication,
         }),
       };
 

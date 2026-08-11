@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 import { orNotFound } from "~/shared/application/or-not-found";
 import { MailAddress } from "~/shared/domain/model/value-objects/mail-address";
 import { ForbiddenError } from "~/shared/errors/forbidden-error";
-import type { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
+import type { MailAddressDuplicationError } from "~/shared/errors/mail-address-duplication-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 import type { ResourceNotFoundError } from "~/shared/errors/resource-not-found-error";
 
@@ -47,7 +47,7 @@ export const updateUserCommand = (
   void,
   | ForbiddenError
   | ResourceNotFoundError
-  | MailAddressAlreadyExistsError
+  | MailAddressDuplicationError
   | RepositoryError,
   UserRepository
 > =>

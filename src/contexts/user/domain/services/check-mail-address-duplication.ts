@@ -1,7 +1,7 @@
 import { Effect, Option } from "effect";
 
 import type { MailAddress } from "~/shared/domain/model/value-objects/mail-address";
-import { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
+import { MailAddressDuplicationError } from "~/shared/errors/mail-address-duplication-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 
 import type { UserId } from "../model/value-objects/user-id";
@@ -10,7 +10,7 @@ import { UserRepository } from "../user-repository";
 /**
  * メールアドレスの重複を検証する (ドメインサービス)。
  * 「同じメールアドレスのユーザーは 2 人存在しない」という業務ルールを担う。
- * 重複していれば MailAddressAlreadyExistsError (errorCode 4091) で失敗する。
+ * 重複していれば MailAddressDuplicationError (errorCode 4091) で失敗する。
  *
  * User 集約 1 つを見ても「他に同じメールアドレスの人が居るか」は判断できないため、
  * 集約にも値オブジェクトにも属さない。こうした集約をまたぐ不変条件を担うのが
@@ -30,7 +30,7 @@ export const checkMailAddressDuplication = (
   options: { readonly excluding?: UserId } = {},
 ): Effect.Effect<
   void,
-  MailAddressAlreadyExistsError | RepositoryError,
+  MailAddressDuplicationError | RepositoryError,
   UserRepository
 > =>
   Effect.gen(function* () {
@@ -39,6 +39,6 @@ export const checkMailAddressDuplication = (
 
     // 除外対象本人以外の誰かが使っていれば重複。
     if (Option.isSome(user) && user.value.id !== options.excluding) {
-      return yield* new MailAddressAlreadyExistsError({ mailAddress });
+      return yield* new MailAddressDuplicationError({ mailAddress });
     }
   });

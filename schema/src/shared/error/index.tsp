@@ -5,6 +5,6 @@ import "./BadRequestError.tsp";
 import "./ConflictError.tsp";
 import "./ForbiddenError.tsp";
 import "./InternalServerError.tsp";
-import "./MailAddressAlreadyExistsError.tsp";
+import "./MailAddressDuplicationError.tsp";
 import "./ResourceNotFoundError.tsp";
 import "./UnauthorizedError.tsp";
