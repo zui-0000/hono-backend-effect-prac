@@ -258,6 +258,51 @@ ADR からテーマ別 doc へリンクする向き（逆ではない）。
 - 自コンテキストへの import は相対（`02-architecture.md`）
 - hk / committed の導入（`00-tech-stack.md`）
 
+### 8. Effect v4 への移行（`latest` になってから）
+
+**引き金は `npm view effect dist-tags` の `latest` が 4.x になること。**
+2026-08-11 時点の状況:
+
+```
+latest  3.22.1          ← いま使っているのはこちら
+beta    4.0.0-beta.107
+```
+
+開発は [`Effect-TS/effect-smol`](https://github.com/Effect-TS/effect-smol) で進んでいる
+（最終 push 2026-07-14 / open issues 0）。beta を追いかけない理由は、
+この repo が学習用で**壊れたときに直す時間より、壊れない土台で書く時間のほうが要る**から。
+
+#### 移行のときに使えるもの
+
+Effect-TS の org を一巡して見つけた（2026-08-11）。**どれも v4 に紐づくので今は入れない。**
+
+| リポジトリ                                        | 何に使うか                                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| [`skills`](https://github.com/Effect-TS/skills)   | `effect-v3-to-v4` skill が移行を誘導する。`npx skills add Effect-TS/skills` |
+| [`codemod`](https://github.com/Effect-TS/codemod) | API 変更の機械的な置き換え                                                  |
+| `node_modules/effect/AGENTS.md`                   | **v4 のパッケージにだけ同梱される**（v3.22.1 には無い。実測済み）           |
+
+`AGENTS.md`（6,230 バイト）は Effect の使い方ではなく**エージェントの振る舞い**を書いた
+ものだった —— 「推測するな」「単一用途に抽象を作るな」「必要な箇所だけ触れ」「単純な案が
+あるなら言え、必要なら押し返せ」。**この repo の方針とほぼ一致している**ので、
+[5. Claude が読めるコード規約の作成](#5-claude-が読めるコード規約の作成)を書くときの
+参考にもなる（v4 を待たずに GitHub 上で読める）。
+
+#### 見送ったもの
+
+| リポジトリ                                                          | 理由                                                           |
+| ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [`eslint-plugin`](https://github.com/Effect-TS/eslint-plugin)       | この repo は oxlint。役割も `@effect/tsgo` と重なる            |
+| [`docgen`](https://github.com/Effect-TS/docgen)                     | JSDoc タグから生成する道具。この repo は**タグを使わない**方針 |
+| [`vscode-extension`](https://github.com/Effect-TS/vscode-extension) | LSP は `@effect/tsgo` で入っている                             |
+| `slopcop`                                                           | Effect リポジトリ自身の PR 仕分けボット                        |
+
+`effect` モノレポの 8 パッケージ（`ai` / `atom` / `effect` / `opentelemetry` /
+`platform` / `sql` / `tools` / `vitest`）のうち、`platform` / `sql` / `vitest` は
+**Hono / Drizzle / bun:test を選んだ結果として対象外**。残るは `@effect/opentelemetry` だけで、
+これは相関 ID と構造化ログを span に変える価値があるが、
+**エクスポート先（Jaeger 等）を立てないと意味がない**ので着手の引き金はそちら。
+
 ### 7. 契約を 2026 年時点の一次情報で洗い直す
 
 きっかけは
