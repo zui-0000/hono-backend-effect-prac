@@ -3,7 +3,7 @@ import { Effect, Layer, Option, Schema } from "effect";
 
 import { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
-import { Database } from "~/shared/infrastructure/db/client";
+import { Database } from "~/shared/infrastructure/db/database-client";
 import { SqlState } from "~/shared/infrastructure/db/error/constants/sql-state";
 import { handleDbError } from "~/shared/infrastructure/db/error/handle-db-error";
 import { isSqlStateViolation } from "~/shared/infrastructure/db/error/postgres-error-reader";

@@ -149,6 +149,29 @@ infrastructure/user-repository-live.ts 実装（export: UserRepositoryLive）
 
 `Live` は本番用 Layer を指す Effect の慣習で、`PasswordHasherLive` などと語が揃う。
 
+### ポートと実装が同居する場合 → 「役割名」
+
+```text
+infrastructure/db/database-client.ts   export: Database（ポート）/ DatabaseLive（実装）
+```
+
+**`-live` を付けない。** あの接尾辞はポートと実装が別ファイルのときに
+名前の衝突を避けるためのもので、同居しているここでは付ける意味がない
+（付けるとポートまで実装を名乗ることになる）。
+
+同居させている理由は `database-client.ts` の doc にある —— ここは infrastructure の中で、
+参照できるのが元から「実装を知ってよい側」だけだから。ポートを import しただけで
+実装の依存を引きずり込む、という `shared/domain` と分けた動機がここには効かない。
+
+ファイル名は export 名（`Database`）ではなく**役割**にしてある。実体は drizzle の
+接続インスタンスであって「データベース」ではないので、`client` のほうが何を持つ
+モジュールか伝わる。`db/` の中にいる時点で DB のものであることは自明なため、
+`db/database-client.ts` は「DB まわりの、接続クライアントの定義」と読める。
+
+> かつては `client.ts` だった。`Database` も `DatabaseLive` も export しているのに
+> ファイル名がどちらでもなく、`shared/infrastructure/` で唯一この規約の外にいた。
+> 2026-08-11 に改めた。
+
 ### ポートを持たない技術固有の資産 → 「技術名」
 
 ```text
@@ -443,7 +466,7 @@ glob を取れるため、ファイルを分けても migration は 1 系列で�
 
 ## DB 接続も Layer で注入する
 
-`shared/infrastructure/db/client.ts` は当初、モジュールのトップレベルで作った singleton を
+`shared/infrastructure/db/database-client.ts` は当初、モジュールのトップレベルで作った singleton を
 `export const db` していた。アダプタ（`*-live.ts`）はそれを直接 `import` していたので、
 このリポジトリで**唯一 DI から外れている場所**だった。これを `Database` タグに変え、
 `Layer.scoped` で供給する形にした。

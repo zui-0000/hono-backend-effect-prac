@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { Effect, Layer, Option } from "effect";
 
-import { Database } from "~/shared/infrastructure/db/client";
+import { Database } from "~/shared/infrastructure/db/database-client";
 import { handleDbError } from "~/shared/infrastructure/db/error/handle-db-error";
 
 import { GetUserQueryService } from "../application/get-user-query-service";

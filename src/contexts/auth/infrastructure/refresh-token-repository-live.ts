@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
 
-import { Database } from "~/shared/infrastructure/db/client";
+import { Database } from "~/shared/infrastructure/db/database-client";
 import { handleDbError } from "~/shared/infrastructure/db/error/handle-db-error";
 
 import { RefreshToken, RevokedReason } from "../domain/model/refresh-token";

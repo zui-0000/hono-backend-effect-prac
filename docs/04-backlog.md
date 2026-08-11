@@ -388,7 +388,7 @@ API テストはステータスと errorCode を `HttpStatus` / `ErrorCode` か�
 設定漏れがあっても最初のクエリまでエラーにならない」と書いていたが、
 **この見立ては実害を過小評価していた**（後述）。3 箇所とも塞ぎ、断言はゼロになった。
 
-アプリ本体（`shared/infrastructure/db/client.ts`）は `Config.redacted` +
+アプリ本体（`shared/infrastructure/db/database-client.ts`）は `Config.redacted` +
 起動時のランタイム構築で解決。`DATABASE_URL` を外して確認済み — exit 1 で落ち、
 ポートは開かない。**効いたのは `Config` ではなく `main.ts` の
 `await runtime.runtime()` のほう**で、`ManagedRuntime` が遅延構築である以上、

@@ -53,7 +53,7 @@ db/                             # アプリではないので src/ の外
 └─ migrations/                  #   生成 SQL + meta（git 管理）
 
 src/shared/infrastructure/db/   # 実行時に動くコード
-├─ client.ts                    #   接続クライアント（bun-sql）の Layer
+├─ database-client.ts           #   接続クライアント（bun-sql）の Layer
 └─ error/
    ├─ constants/
    │  ├─ sql-state.ts                    # SQLSTATE の語彙
