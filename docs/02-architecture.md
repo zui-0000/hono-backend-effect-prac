@@ -10,7 +10,7 @@
 ```text
 drizzle.config.ts       # drizzle-kit の設定（orval.config.ts と同じくルートに置く）
 db/                     # マイグレータと成果物。アプリではないので src/ の外
-schema/                 # TypeSpec による API 契約（OpenAPI 3.1 を出力）
+schema/                 # TypeSpec による API 契約（OpenAPI 3.2 を出力）
 src/
 ├─ main.ts              # エントリ（Bun）。本番の Layer から runtime を作り app に注入
 ├─ app.ts               # コンテキストをパスにマウントするだけ（1 コンテキスト 1 行）

@@ -13,7 +13,7 @@
 | Effect の静的検査  | @effect/tsgo（Effect 固有の診断）          |
 | git hook           | hk（コミット前に全検査を通す）             |
 | コミットメッセージ | committed（Conventional Commits を強制）   |
-| API スキーマ       | TypeSpec（OpenAPI 3.1 を生成）             |
+| API スキーマ       | TypeSpec（OpenAPI 3.2 を生成）             |
 | バリデーション     | Effect Schema（orval で OpenAPI から生成） |
 | 言語               | TypeScript                                 |
 
