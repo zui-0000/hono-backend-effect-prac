@@ -135,7 +135,7 @@ GetUserQueryOutput = { name, mailAddress };
 **一度も import されなかったファイルを表に載せない**ため、未テストのモジュールが
 0% ではなく「存在しない」ことになり、分母が安定していないから。
 
-### 4. oxlint の規約の見直し（2026-08-09 に一巡した）
+### 4. lint の規約の見直し（一巡済み。着手不要）
 
 全カテゴリを `warn` で通して測った。**カテゴリ単位で足すものは無かった。**
 
@@ -160,6 +160,42 @@ GetUserQueryOutput = { name, mailAddress };
 > 食わせる）を検出できることを確認したが、**17 件中 16 件が `Option.some` の誤検出**。
 > 黙らせるには disable コメントが 16 個要るので見送った。
 > **着手の引き金は oxlint がこのルールに除外設定を持つこと。**
+
+#### `@effect/tsgo` の診断（2026-08-11 に一巡した）
+
+同じやり方で測った。**全 79 ルールを `error` にして `tsc` を通す**
+（`tsconfig.measure.json` を一時的に作り、`diagnosticSeverity` に全ルールを列挙）。
+**採るものは無かった。**
+
+`tsc` が既定で報告するのは Correctness カテゴリだけで、Anti-pattern / Effect-native /
+Style の 60 本以上は**そもそも見えていない**。測らないと存在に気付けない。
+
+| ルール                 | 本番 | テスト | 判断                                              |
+| ---------------------- | ---: | -----: | ------------------------------------------------- |
+| `unnecessaryPipeChain` |   32 |      0 | 既に `off`（pipe を 1 段ずつ分ける規約と衝突）    |
+| `asyncFunction`        |    3 |     67 | Hono の API が `async` を要求。構造上避けられない |
+| `globalDate`           |    2 |     19 | **本番 2 件とも誤検出**（下記）                   |
+| `deterministicKeys`    |    2 |      0 | 実在。だが見送り（下記）                          |
+| `processEnv`           |    1 |      0 | `db/database-url.ts`（drizzle 用ツール）          |
+| `globalConsole`        |    1 |      0 | `db/migrate.ts`（スクリプト）                     |
+| `strictEffectProvide`  |    0 |      1 | テストのみ                                        |
+
+**`globalDate` の 2 件はどちらも `new Date(millis)`（引数付き）** で、システム時刻を
+読んでいない。うち 1 件は `shared/domain/clock.ts` ——「Clock を使え」と Clock 自身に
+言っている。ルールは `new Date` という形だけを見ている。
+
+> **惜しかったもの: `deterministicKeys`。**
+> サービスの識別子をパス込みの完全修飾（`hono-backend-effect-prac/contexts/user/
+domain/user-repository/UserRepository`）にせよ、という主張。同名の Tag が別パッケージに
+> あっても衝突しない。**指摘は実在だが、`Context.Tag`（クラス形式）の 2 件しか見ず、
+> `Context.GenericTag` の 7 件は素通しする。** 同じ問題を抱えているのに片方だけ直す形になり、
+> ログに出る名前も長大化する。単一アプリで衝突する相手もいない。
+> `no-array-callback-reference` と同じ理由（検出範囲の偏り）で見送った。
+> **着手の引き金は GenericTag も対象になること、またはパッケージを分けること。**
+
+測定は「Effect の造詣が要る作業」ではなかった。鳴った 7 本の中身を読むだけで済み、
+むしろ**この repo がどこで Effect の外に出ているか**（Hono 境界の `async` 3 件、
+Clock アダプタ）が分かった。次に測るときも同じ手順でよい。
 
 判断そのものは [`.oxlintrc.jsonc`](../.oxlintrc.jsonc) にも書いてある。
 次に足すときも [わざと違反するファイルを作って確認する](03-boundary-enforcement.md#落とし穴)
