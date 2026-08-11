@@ -17,12 +17,8 @@ import { tUser } from "./drizzle-schema";
 /**
  * 検索結果の先頭行を取り出す (0 件なら Option.none)。
  *
- * リポジトリ側の `restoreUser` と違い、**集約への復元をしない**。射影をそのまま
- * DTO として返す経路なので decode を挟む相手がおらず、先頭を取るだけで終わる。
- * 同じ名前を付けると「復元している」という嘘になるため、動詞から分けてある。
- *
- * `Effect.map` を中に畳んで pipeable にしてあるのは、呼び出し側を
- * 「名前の付いた段」だけで揃えるため (経緯は docs/02-architecture.md)。
+ * リポジトリ側の `restoreUser` と違い**集約への復元をしない**。射影をそのまま DTO として
+ * 返す経路で decode を挟む相手がおらず、`restore` と名乗ると嘘になるため動詞を分けてある。
  */
 const takeFirstRow = <A, E, R>(
   effect: Effect.Effect<readonly A[], E, R>,

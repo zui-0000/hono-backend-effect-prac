@@ -13,9 +13,6 @@ import { tRefreshToken } from "./drizzle-schema";
  * 行の型がそのまま RefreshToken.Encoded なので、列ごとに組み立てず丸ごと decode する
  * (revoked_at の NULL は Option.none になる)。
  * DB の値は既に妥当な前提のため decode 失敗は defect 扱い。
- *
- * `Effect.flatMap` を中に畳んで pipeable にしてあるのは、呼び出し側を
- * 「名前の付いた段」だけで揃えるため (経緯は docs/02-architecture.md)。
  */
 const restoreRefreshToken = <E, R>(
   effect: Effect.Effect<readonly (typeof tRefreshToken.$inferSelect)[], E, R>,
