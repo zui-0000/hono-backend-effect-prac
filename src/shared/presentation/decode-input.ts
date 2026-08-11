@@ -7,10 +7,20 @@ import type { ErrorDetail } from "~/shared/errors/error-detail";
 import { ErrorMessage } from "./constants/error-message";
 
 /**
- * スキーマで検証し、失敗を `BadRequestError`（違反フィールド付き）に変換する。
+ * HTTP 由来の値から、**ユースケースの入力 DTO を組み立てる**。
+ * 失敗は `BadRequestError`（違反フィールドつき）。
  *
- * **この層で唯一、controller が直接呼ぶもの。** 契約で検証済みの入力を合成して、
- * ユースケースの入力（値オブジェクト）を組み立てるために使う。
+ * **この層で唯一、controller が直接呼ぶもの。** 契約で検証済みの
+ * `body` / `params` / `header` / 認証済み claims を合成し、
+ * ユースケースが宣言した形（`UpdateUserCommandInput`、`GetUserQueryInput` など）へ移す。
+ *
+ * ## 名前について
+ *
+ * `toDto` / `toCommandInput` も検討したが `decodeInput` のままにした。
+ * `toCommandInput` はクエリ（`GetUserQueryInput`）に合わず、`toDto` は
+ * **失敗しない変換に見える**（実際は 400 になりうる）。`decode` は Effect Schema 自身の
+ * 動詞で、`Schema.decode(X)(v)` と同じく「失敗しうる変換」を意味する。
+ * この層は `validate*`（契約の検証）と `decode*`（DTO への変換）で語彙を分けてある。
  *
  * ## 値は変えない。型に検証の履歴を刻む
  *
@@ -34,6 +44,23 @@ import { ErrorMessage } from "./constants/error-message";
  * それは 2026-08-11 に外した（利用者が名乗った表記を潰さないため。経緯は
  * `shared/domain/model/value-objects/mail-address.ts`）。残っているのは型の仕事だけ。
  *
+ * ## なぜカリー化してあるか
+ *
+ * `Schema.decode(X)(v)` と同じ形にするため。以前は `decodeInput(schema, source)` と
+ * 2 引数に潰していたが、**それだと pipe に置けず** controller が `Effect.gen` で
+ * `const input = yield*` と受け止めるしかなかった。出口の `SuccessResponse.Ok(schema)`
+ * は既にカリー化されているので、入口だけ形が違う状態でもあった。
+ *
+ * 揃えた結果、controller は入口から出口まで 1 本の pipe になる。
+ *
+ *   decodeInput(RefreshCommandInput)(body)
+ *     .pipe(Effect.flatMap(refreshCommand))
+ *     .pipe(SuccessResponse.Ok(Refresh200Response));
+ *
+ * 引数を逆（`decodeInput(source, schema)`）にする案もあった。日本語の語順には近いが、
+ * Effect の生態系は一貫してデータ後置で、逆にすると**この関数だけ永久に pipe へ
+ * 置けなくなる**ため採らなかった。
+ *
  * `handler/validate-request.ts` の `validate*` はこれの薄い上乗せで、
  * 「HTTP のどこから値を取り出すか」だけが違う。
  *
@@ -54,19 +81,18 @@ const toErrorDetails = (error: ParseError): readonly ErrorDetail[] =>
     message: issue.message,
   }));
 
-export const decodeInput = <A, I>(
-  schema: Schema.Schema<A, I>,
-  source: unknown,
-): Effect.Effect<A, BadRequestError> =>
-  Schema.decodeUnknown(
-    schema,
-    decodeOptions,
-  )(source).pipe(
-    Effect.mapError(
-      (error) =>
-        new BadRequestError({
-          message: ErrorMessage.BadRequest,
-          details: toErrorDetails(error),
-        }),
-    ),
-  );
+export const decodeInput =
+  <A, I>(schema: Schema.Schema<A, I>) =>
+  (source: unknown): Effect.Effect<A, BadRequestError> =>
+    Schema.decodeUnknown(
+      schema,
+      decodeOptions,
+    )(source).pipe(
+      Effect.mapError(
+        (error) =>
+          new BadRequestError({
+            message: ErrorMessage.BadRequest,
+            details: toErrorDetails(error),
+          }),
+      ),
+    );

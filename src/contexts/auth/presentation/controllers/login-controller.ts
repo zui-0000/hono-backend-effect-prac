@@ -15,10 +15,6 @@ type LoginControllerInput = { body: typeof LoginBody.Type };
  * メールアドレスとパスワードで券を発行する (POST /auth/login)。
  */
 export const loginController = ({ body }: LoginControllerInput) =>
-  Effect.gen(function* () {
-    const input = yield* decodeInput(LoginCommandInput, body);
-
-    return yield* loginCommand(input).pipe(
-      SuccessResponse.Ok(Login200Response),
-    );
-  });
+  decodeInput(LoginCommandInput)(body)
+    .pipe(Effect.flatMap(loginCommand))
+    .pipe(SuccessResponse.Ok(Login200Response));

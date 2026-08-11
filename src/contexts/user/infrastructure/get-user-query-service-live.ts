@@ -20,7 +20,7 @@ export const GetUserQueryServiceLive = Layer.effect(
     const db = yield* Database;
 
     return {
-      execute: (id) =>
+      execute: ({ id }) =>
         Effect.tryPromise(() =>
           db
             .select({ name: tUser.name, mailAddress: tUser.mailAddress })

@@ -22,10 +22,6 @@ type LogoutControllerInput = { auth: AccessTokenClaims };
  * auth の語彙である SessionId へ変換するのはこの層の仕事。
  */
 export const logoutController = ({ auth }: LogoutControllerInput) =>
-  Effect.gen(function* () {
-    const input = yield* decodeInput(LogoutCommandInput, {
-      sessionId: auth.sid,
-    });
-
-    return yield* logoutCommand(input).pipe(SuccessResponse.NoContent);
-  });
+  decodeInput(LogoutCommandInput)({ sessionId: auth.sid })
+    .pipe(Effect.flatMap(logoutCommand))
+    .pipe(SuccessResponse.NoContent);

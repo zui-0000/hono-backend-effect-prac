@@ -24,11 +24,6 @@ export const changePasswordController = ({
   body,
   params,
 }: ChangePasswordControllerInput) =>
-  Effect.gen(function* () {
-    const input = yield* decodeInput(ChangePasswordCommandInput, {
-      ...body,
-      id: params.id,
-    });
-
-    return yield* changePasswordCommand(input).pipe(SuccessResponse.NoContent);
-  });
+  decodeInput(ChangePasswordCommandInput)({ ...body, id: params.id })
+    .pipe(Effect.flatMap(changePasswordCommand))
+    .pipe(SuccessResponse.NoContent);

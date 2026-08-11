@@ -40,7 +40,7 @@ const validateJson = <A, I>(
       try: () => c.req.json(),
       catch: () => new BadRequestError({ message: ErrorMessage.MalformedJson }),
     });
-    return yield* decodeInput(schema, raw);
+    return yield* decodeInput(schema)(raw);
   });
 
 /**
@@ -58,14 +58,14 @@ const validateHeader = <A, I>(
   const source = Object.fromEntries(
     headerNames.map((name) => [name, received[name.toLowerCase()]]),
   );
-  return decodeInput(schema, source);
+  return decodeInput(schema)(source);
 };
 
 /** パスパラメータを API 契約スキーマで検証する。 */
 const validateParams = <A, I>(
   c: Context,
   schema: Schema.Schema<A, I>,
-): Effect.Effect<A, BadRequestError> => decodeInput(schema, c.req.param());
+): Effect.Effect<A, BadRequestError> => decodeInput(schema)(c.req.param());
 
 /**
  * クエリパラメータを API 契約スキーマで検証する。
@@ -77,7 +77,7 @@ const validateParams = <A, I>(
 const validateQuery = <A, I>(
   c: Context,
   schema: Schema.Schema<A, I>,
-): Effect.Effect<A, BadRequestError> => decodeInput(schema, c.req.query());
+): Effect.Effect<A, BadRequestError> => decodeInput(schema)(c.req.query());
 
 /**
  * リクエストのどの入力源を契約で検証するかの宣言。**値はすべてスキーマ。**

@@ -15,10 +15,7 @@ type CreateUserControllerInput = { body: typeof CreateUserBody.Type };
  * ユーザーを新規作成する (POST /users)。
  */
 export const createUserController = ({ body }: CreateUserControllerInput) =>
-  Effect.gen(function* () {
-    const input = yield* decodeInput(CreateUserCommandInput, body);
-
-    return yield* createUserCommand(input)
-      .pipe(Effect.map((id) => ({ id })))
-      .pipe(SuccessResponse.Created(CreateUser201Response));
-  });
+  decodeInput(CreateUserCommandInput)(body)
+    .pipe(Effect.flatMap(createUserCommand))
+    .pipe(Effect.map((id) => ({ id })))
+    .pipe(SuccessResponse.Created(CreateUser201Response));

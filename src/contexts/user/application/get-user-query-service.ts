@@ -1,6 +1,23 @@
-import { Context, type Effect, type Option } from "effect";
+import { Context, type Effect, type Option, Schema } from "effect";
 
 import type { RepositoryError } from "~/shared/errors/repository-error";
+
+import { UserId } from "../domain/model/value-objects/user-id";
+
+/**
+ * getUser クエリの入力。
+ *
+ * 項目が 1 つでも DTO にするのは、**ユースケースが欲しい形を宣言するのが DTO の役割**
+ * だから。プリミティブを直接受けると、その役割を呼び出し側の作法に肩代わりさせることになる
+ * (`execute("hello")` が型で止まらない)。コマンド側が例外なく DTO を受けているので、
+ * 読み取りだけ素通しにする理由もない。
+ *
+ * `UserId` (ドメインの値オブジェクト) を使うのは、`VerifyCredentialsQueryService` が
+ * 既に `Option<UserId>` を返しているのと同じ理由。**クエリ経路が domain を経由しない**のは
+ * 集約を復元しないという意味であって、ドメインの語彙を使わないという意味ではない。
+ */
+export const GetUserQueryInput = Schema.Struct({ id: UserId });
+export type GetUserQueryInput = typeof GetUserQueryInput.Type;
 
 /**
  * getUser クエリの結果。ドメインの User 集約ではなく読み取り専用の射影で、
@@ -27,7 +44,7 @@ export type GetUserQueryOutput = {
 export interface GetUserQueryService {
   /** id でユーザーを取得する (存在しなければ Option.none)。 */
   readonly execute: (
-    id: string,
+    input: GetUserQueryInput,
   ) => Effect.Effect<Option.Option<GetUserQueryOutput>, RepositoryError>;
 }
 export const GetUserQueryService = Context.GenericTag<GetUserQueryService>(

@@ -15,9 +15,6 @@ type RefreshControllerInput = { body: typeof RefreshBody.Type };
  * アクセストークンを再発行する (POST /auth/refresh)。
  */
 export const refreshController = ({ body }: RefreshControllerInput) =>
-  Effect.gen(function* () {
-    const input = yield* decodeInput(RefreshCommandInput, body);
-    return yield* refreshCommand(input).pipe(
-      SuccessResponse.Ok(Refresh200Response),
-    );
-  });
+  decodeInput(RefreshCommandInput)(body)
+    .pipe(Effect.flatMap(refreshCommand))
+    .pipe(SuccessResponse.Ok(Refresh200Response));

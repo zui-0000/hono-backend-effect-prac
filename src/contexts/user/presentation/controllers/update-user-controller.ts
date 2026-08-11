@@ -21,11 +21,6 @@ export const updateUserController = ({
   body,
   params,
 }: UpdateUserControllerInput) =>
-  Effect.gen(function* () {
-    const input = yield* decodeInput(UpdateUserCommandInput, {
-      ...body,
-      id: params.id,
-    });
-
-    return yield* updateUserCommand(input).pipe(SuccessResponse.NoContent);
-  });
+  decodeInput(UpdateUserCommandInput)({ ...body, id: params.id })
+    .pipe(Effect.flatMap(updateUserCommand))
+    .pipe(SuccessResponse.NoContent);
