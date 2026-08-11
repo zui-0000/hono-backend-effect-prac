@@ -5,30 +5,34 @@ import { Password } from "~/shared/domain/model/value-objects/password";
 import { PasswordHasher } from "~/shared/domain/password-hasher";
 
 import { VerifyCredentialsQueryService } from "../application/verify-credentials-query-service";
-import { verifyUserPassword } from "../domain/model/user";
+import { verifyCredentials } from "../domain/services/verify-credentials";
 import { UserRepository } from "../domain/user-repository";
 
 /**
  * VerifyCredentialsQueryService の実装 (アダプタ)。
  *
- * SQL を書かず、**user コンテキストが既に持っているものを組み合わせるだけ**。
- * 集約の読み出しは UserRepository、照合は domain の verifyUserPassword が担う。
- * リポジトリを内側で使うのは構わない — 渡してはいけないのは境界の外 (auth) であって、
- * 自分のコンテキストの中で使うのは通常の経路。
+ * **SQL は書かない。この層で担うのは語彙の変換と配線だけ。**
+ * 照合そのものはドメインサービス [`verifyCredentials`](../domain/services/verify-credentials.ts)
+ * にある。
  *
- * **Query なのに domain を経由する。** get-user-query-service.ts には
- * 「Query は domain を経由しない」と書いてあり、これはその例外にあたる。
- * 理由は、照合が業務ルールとして既に domain にあるから
- * (verifyUserPassword の doc — ビジネス側に「パスワード変更時に現在のパスワードを
- * 確認するか」を聞ける、という基準で内側に置いた)。
- * 経由を避けて PasswordHasher を直接叩くこともできるが、それは**同じ業務ルールを
- * 2 か所に持つ**ことになる。射影を返すという性質より、ルールを 1 つに保つほうを採った。
+ * ## 何を変換しているか
  *
- * 入力の形式不正 (メールアドレスとして読めない・パスワードが短すぎる) も
- * **Option.none にまとめる**。ここで 400 と 401 を書き分けると、
- * 「その形式は受け付ける = 存在しうる」という情報を与えてしまう。
- * 契約スキーマの検証は presentation が既に済ませているので、ここへ来るのは
- * 形式としては妥当な値のはず。もし通ってきたら「該当なし」で構わない。
+ * ポートが素の `string` を受けるのは、**auth が user の語彙を持たない**から
+ * (値オブジェクトへの変換は所有者である user の仕事。経緯はポートの doc)。
+ * その変換を担うのがここ。外の呼び出し側の型を自分のドメインの型へ合わせる、
+ * という意味で**これは正しくアダプタの仕事**にあたる。
+ *
+ * 形式不正 (メールアドレスとして読めない・パスワードが短すぎる) も **Option.none に
+ * まとめる**。ここで 400 と 401 を書き分けると「その形式は受け付ける = 存在しうる」
+ * という情報を与えてしまう。契約スキーマの検証は presentation が既に済ませているので、
+ * ここへ来るのは形式としては妥当な値のはず。通ってきたら「該当なし」で構わない。
+ *
+ * ## なぜ provideService で注ぎ直すのか
+ *
+ * ポートの `execute` は `R = never` を約束している (auth に user の依存を見せないため)。
+ * ドメインサービスは `UserRepository | PasswordHasher` を要求するので、
+ * Layer 構築時に受け取ったものをここで埋めて `R` を閉じる。**ポートが壁である以上、
+ * 壁の内側で配線し切る必要がある**という構造上の帰結。
  */
 export const VerifyCredentialsQueryServiceLive = Layer.effect(
   VerifyCredentialsQueryService,
@@ -45,24 +49,15 @@ export const VerifyCredentialsQueryServiceLive = Layer.effect(
           const plainText = yield* Schema.decodeUnknown(Password)(
             password,
           ).pipe(Effect.option);
+
           if (Option.isNone(mail) || Option.isNone(plainText)) {
             return Option.none();
           }
 
-          const found = yield* userRepository.findByMailAddress(mail.value);
-          if (Option.isNone(found)) {
-            return Option.none();
-          }
-
-          // 一致しなければ UnauthorizedError で失敗するので、none に畳む。
-          // 「居ない」と「合わない」を呼び出し側から区別させないため。
-          return yield* verifyUserPassword(found.value, plainText.value)
-            .pipe(Effect.as(Option.some(found.value.id)))
-            .pipe(
-              Effect.catchTag("UnauthorizedError", () => Effect.succeedNone),
-            )
-            .pipe(Effect.provideService(PasswordHasher, passwordHasher));
-        }),
+          return yield* verifyCredentials(mail.value, plainText.value);
+        })
+          .pipe(Effect.provideService(UserRepository, userRepository))
+          .pipe(Effect.provideService(PasswordHasher, passwordHasher)),
     };
   }),
 );
