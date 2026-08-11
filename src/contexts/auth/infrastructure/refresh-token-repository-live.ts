@@ -13,15 +13,24 @@ import { tRefreshToken } from "./drizzle-schema";
  * 行の型がそのまま RefreshToken.Encoded なので、列ごとに組み立てず丸ごと decode する
  * (revoked_at の NULL は Option.none になる)。
  * DB の値は既に妥当な前提のため decode 失敗は defect 扱い。
+ *
+ * `Effect.flatMap` を中に畳んで pipeable にしてあるのは、呼び出し側を
+ * 「名前の付いた段」だけで揃えるため (経緯は docs/02-architecture.md)。
  */
-const toDomainHead = (
-  rows: readonly (typeof tRefreshToken.$inferSelect)[],
-): Effect.Effect<Option.Option<RefreshToken>> =>
-  Option.fromNullable(rows[0])
-    .pipe(
-      Option.map((row) => Schema.decode(RefreshToken)(row).pipe(Effect.orDie)),
-    )
-    .pipe(Effect.transposeOption);
+const restoreRefreshToken = <E, R>(
+  effect: Effect.Effect<readonly (typeof tRefreshToken.$inferSelect)[], E, R>,
+): Effect.Effect<Option.Option<RefreshToken>, E, R> =>
+  effect.pipe(
+    Effect.flatMap((rows) =>
+      Option.fromNullable(rows[0])
+        .pipe(
+          Option.map((row) =>
+            Schema.decode(RefreshToken)(row).pipe(Effect.orDie),
+          ),
+        )
+        .pipe(Effect.transposeOption),
+    ),
+  );
 
 /** 集約を行の形へ落とす。Encoded がそのまま insert の値になる。 */
 const toRow = (token: RefreshToken): typeof tRefreshToken.$inferInsert =>
@@ -51,7 +60,7 @@ export const RefreshTokenRepositoryLive = Layer.effect(
             .limit(1),
         )
           .pipe(handleDbError)
-          .pipe(Effect.flatMap(toDomainHead)),
+          .pipe(restoreRefreshToken),
 
       // 失効と発行を 1 トランザクションで行う。間で落ちるとクライアントは
       // 手元の券が使えないまま新しい券も受け取れず、再ログインしか道が無くなる

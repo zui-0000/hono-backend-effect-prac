@@ -24,21 +24,24 @@ const MAIL_ADDRESS_UNIQUE_CONSTRAINT = "t_user_mail_address_lower_unique";
  * 「最後の砦」の経路。他の失敗は RepositoryError (500) のまま素通しする。
  * 制約名も翻訳先も user 固有のため handleDbError のようには共有しない。
  */
+/** その失敗が「メールアドレスの一意制約違反」かどうか。 */
+const isMailAddressDuplication = (error: RepositoryError): boolean =>
+  isSqlStateViolation(
+    error.cause,
+    SqlState.UniqueViolation,
+    MAIL_ADDRESS_UNIQUE_CONSTRAINT,
+  );
+
 const handleMailAddressDuplicationError =
   (user: User) =>
   <A, R>(
     effect: Effect.Effect<A, RepositoryError, R>,
   ): Effect.Effect<A, MailAddressDuplicationError | RepositoryError, R> =>
     effect.pipe(
-      Effect.catchIf(
-        (error) =>
-          isSqlStateViolation(
-            error.cause,
-            SqlState.UniqueViolation,
-            MAIL_ADDRESS_UNIQUE_CONSTRAINT,
-          ),
-        () =>
-          new MailAddressDuplicationError({ mailAddress: user.mailAddress }),
+      Effect.mapError((error) =>
+        isMailAddressDuplication(error)
+          ? new MailAddressDuplicationError({ mailAddress: user.mailAddress })
+          : error,
       ),
     );
 
@@ -46,13 +49,20 @@ const handleMailAddressDuplicationError =
  * 検索結果の先頭行を User 集約に復元する (0 件なら Option.none)。
  * 行の型がそのまま User.Encoded なので、列ごとに組み立てず丸ごと decode する。
  * DB の値は既に妥当な前提のため decode 失敗は defect 扱い。
+ *
+ * `Effect.flatMap` を中に畳んで pipeable にしてあるのは、呼び出し側を
+ * 「名前の付いた段」だけで揃えるため (経緯は docs/02-architecture.md)。
  */
-const toDomainHead = (
-  rows: readonly (typeof tUser.$inferSelect)[],
-): Effect.Effect<Option.Option<User>> =>
-  Option.fromNullable(rows[0])
-    .pipe(Option.map((row) => Schema.decode(User)(row).pipe(Effect.orDie)))
-    .pipe(Effect.transposeOption);
+const restoreUser = <E, R>(
+  effect: Effect.Effect<readonly (typeof tUser.$inferSelect)[], E, R>,
+): Effect.Effect<Option.Option<User>, E, R> =>
+  effect.pipe(
+    Effect.flatMap((rows) =>
+      Option.fromNullable(rows[0])
+        .pipe(Option.map((row) => Schema.decode(User)(row).pipe(Effect.orDie)))
+        .pipe(Effect.transposeOption),
+    ),
+  );
 
 /**
  * UserRepository の Drizzle 実装 (アダプタ)。
@@ -116,7 +126,7 @@ export const UserRepositoryLive = Layer.effect(
           db.select().from(tUser).where(eq(tUser.id, id)).limit(1),
         )
           .pipe(handleDbError)
-          .pipe(Effect.flatMap(toDomainHead)),
+          .pipe(restoreUser),
 
       // 大小を無視して引く。保存は入力どおりなので eq では
       // Taro.Yamada@... と taro.yamada@... が別物になり、本人を見つけられない。
@@ -131,7 +141,7 @@ export const UserRepositoryLive = Layer.effect(
             .limit(1),
         )
           .pipe(handleDbError)
-          .pipe(Effect.flatMap(toDomainHead)),
+          .pipe(restoreUser),
 
       deleteById: (id) =>
         Effect.tryPromise(() => db.delete(tUser).where(eq(tUser.id, id)))

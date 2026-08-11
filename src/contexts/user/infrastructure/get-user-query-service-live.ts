@@ -14,6 +14,21 @@ import { tUser } from "./drizzle-schema";
  * (ドメインを一切 import しないのが Query 側の実装の特徴)。
  * 必要な列だけを取るので、集約の全列を読む Repository より素直かつ軽い。
  */
+/**
+ * 検索結果の先頭行を取り出す (0 件なら Option.none)。
+ *
+ * リポジトリ側の `restoreUser` と違い、**集約への復元をしない**。射影をそのまま
+ * DTO として返す経路なので decode を挟む相手がおらず、先頭を取るだけで終わる。
+ * 同じ名前を付けると「復元している」という嘘になるため、動詞から分けてある。
+ *
+ * `Effect.map` を中に畳んで pipeable にしてあるのは、呼び出し側を
+ * 「名前の付いた段」だけで揃えるため (経緯は docs/02-architecture.md)。
+ */
+const takeFirstRow = <A, E, R>(
+  effect: Effect.Effect<readonly A[], E, R>,
+): Effect.Effect<Option.Option<A>, E, R> =>
+  effect.pipe(Effect.map((rows) => Option.fromNullable(rows[0])));
+
 export const GetUserQueryServiceLive = Layer.effect(
   GetUserQueryService,
   Effect.gen(function* () {
@@ -29,7 +44,7 @@ export const GetUserQueryServiceLive = Layer.effect(
             .limit(1),
         )
           .pipe(handleDbError)
-          .pipe(Effect.map((rows) => Option.fromNullable(rows[0]))),
+          .pipe(takeFirstRow),
     };
   }),
 );

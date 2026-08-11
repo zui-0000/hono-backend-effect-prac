@@ -188,6 +188,45 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 | 生成された Effect Schema              | `src/generated/`           |
 | ネームスペース                        | PostgreSQL の用語          |
 
+### `pipe` の段には名前を付ける
+
+**呼び出し側に並ぶのは「名前の付いた段」だけにする。** `Effect.map` / `Effect.flatMap` /
+`Effect.mapError` といったコンビネータは、関数の中へ畳む。
+
+```ts
+Effect.tryPromise(() => db.insert(tUser).values({ ... }))
+  .pipe(handleDbError)                            // 失敗 → RepositoryError
+  .pipe(handleMailAddressDuplicationError(user))  // 一意制約違反 → 409
+  .pipe(Effect.asVoid);
+
+Effect.tryPromise(() => db.select().from(tUser).where(...).limit(1))
+  .pipe(handleDbError)
+  .pipe(restoreUser); // 先頭行 → User 集約（0 件なら Option.none）
+```
+
+**例外は「名前を付けても何も足せない汎用操作」。** `Effect.asVoid` は「結果を捨てる」
+以外に言うことがなく、`Effect.orDie` も同じ。これらは素のまま置く。
+
+#### 検討して見送った形
+
+コンビネータを呼び出し側に出す案（`.pipe(Effect.mapError(toRepositoryError))`）を
+実際に組んで比べた。**どのチャネルを触るかが読める**という明確な利点があり、
+素の関数（`error → error`）になるので `Effect.tryPromise` の `catch:` でも使える。
+
+それでも採らなかった。**関数側にコンビネータが無いと、その関数をどの局面で呼ぶのかが
+関数だけを見て分からなくなる**から。`handleDbError` は名前が「エラーの処理」と言い、
+中身が `Effect.mapError` と言う。**関数が単体で完結している**。
+`toRepositoryError` は、呼び出し側が `Effect.mapError` で包んで初めて意味が決まる。
+
+加えて、条件付きの翻訳に `refine` のような見慣れない語が要ることと、
+成功側（`restoreUser`）まで露出させると `.pipe(Effect.flatMap(...))` が全箇所に出て、
+かえって段が読みにくくなることも理由。
+
+> Effect には公開された規約が無い（公式の `.patterns/`、GitHub Discussions、
+> ドキュメントのいずれにも該当する記述が無いことを 2026-08-11 に確認した）。
+> ライブラリ本体は `Function.dual` で**両方の形を提供する**ことで回避しているが、
+> アプリケーションコードには重い。ここは自分たちで決める領域だと判断した。
+
 ### 失敗の翻訳 → 「`handle` + 何を」
 
 **各層には「失敗をその層の語彙へ直す窓口」がある。** 名前を揃えて、構造が読めるようにする。
@@ -198,6 +237,30 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 | `handleMailAddressDuplicationError` | infrastructure | 一意制約違反 → `MailAddressDuplicationError`    |
 | `handleErrorResponse`               | presentation   | `ApplicationError` → HTTP 応答（純粋な表）      |
 | `handleFailures`                    | presentation   | Effect の失敗経路 → 応答（pipeable。defect も） |
+
+#### 成功側は「動詞 + 何に」
+
+失敗側が `handle*` なのに対し、成功側は**何をするか**を動詞で名乗る。
+
+| 名前                  | 層             | 何をするか                                        |
+| --------------------- | -------------- | ------------------------------------------------- |
+| `restoreUser`         | infrastructure | 先頭行を **User 集約に復元**する（decode を通す） |
+| `restoreRefreshToken` | infrastructure | 同上（RefreshToken）                              |
+| `takeFirstRow`        | infrastructure | 先頭行を**取るだけ**。復元しない                  |
+| `orNotFound`          | application    | 無ければ 404 にする                               |
+
+**クエリ側だけ動詞が違うのは意図的。** `takeFirstRow` は射影をそのまま DTO として
+返す経路で、decode を挟む相手がいない。`restore*` と同じ名前を付けると
+「復元している」という嘘になる（[読み取りと書き込みは、経路を混ぜない](#読み取りと書き込みは経路を混ぜない)）。
+
+> かつては両方 `toDomainHead` という名前だった。**`user` と `auth` の 2 ファイルに
+> 同名で存在し、返す型だけが違う**（`Option<User>` と `Option<RefreshToken>`）状態で、
+> 名前が何も区別していなかった。2026-08-11 に改めた。
+
+`orNotFound` が `handle*` でも `restore*` でもないのは、**Effect 自身の語彙**に
+乗っているため（`Effect.orDie` / `Effect.orElseFail` / `Effect.orElseSucceed`）。
+この repo でも `Effect.orDie` を 9 箇所で使っており、`.pipe(orNotFound)` と
+`.pipe(Effect.orDie)` が並んで読める。
 
 #### `Error` と `Failure` は使い分ける
 
