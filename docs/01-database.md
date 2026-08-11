@@ -61,7 +61,7 @@ src/shared/infrastructure/db/   # 実行時に動くコード
    │  └─ failure-by-error-code.ts        # Bun の code → 内訳
    ├─ postgres-error-reader.ts  #   例外を読む / 制約違反を判定
    ├─ classify-db-failure.ts    #   ログ用の内訳へ分類
-   └─ handle-db-failure.ts      #   失敗を RepositoryError へ翻訳
+   └─ handle-db-error.ts      #   失敗を RepositoryError へ翻訳
 
 src/contexts/<context>/infrastructure/
 └─ drizzle-schema.ts            # そのコンテキストが所有するテーブル定義

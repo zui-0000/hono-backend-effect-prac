@@ -169,21 +169,45 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 
 **各層には「失敗をその層の語彙へ直す窓口」がある。** 名前を揃えて、構造が読めるようにする。
 
-| 名前                           | 層             | 何を何に直すか                                  |
-| ------------------------------ | -------------- | ----------------------------------------------- |
-| `handleDbFailure`              | infrastructure | DB 例外 → `RepositoryError`                     |
-| `handleMailAddressDuplication` | infrastructure | 一意制約違反 → `MailAddressAlreadyExistsError`  |
-| `handleErrorResponse`          | presentation   | `ApplicationError` → HTTP 応答（純粋な表）      |
-| `handleFailures`               | presentation   | Effect の失敗経路 → 応答（pipeable。defect も） |
+| 名前                                | 層             | 何を何に直すか                                  |
+| ----------------------------------- | -------------- | ----------------------------------------------- |
+| `handleDbError`                     | infrastructure | DB 例外 → `RepositoryError`                     |
+| `handleMailAddressDuplicationError` | infrastructure | 一意制約違反 → `MailAddressAlreadyExistsError`  |
+| `handleErrorResponse`               | presentation   | `ApplicationError` → HTTP 応答（純粋な表）      |
+| `handleFailures`                    | presentation   | Effect の失敗経路 → 応答（pipeable。defect も） |
+
+#### `Error` と `Failure` は使い分ける
+
+同じ「失敗」でも語を分けてある。**混ぜると、どちらを指しているか毎回読まないと分からなくなる。**
+
+| 語        | 意味                                                           | 使っているもの                                                              |
+| --------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `Error`   | **特定の型付きエラー**を作る・変換する                         | `handleDbError` / `handleMailAddressDuplicationError` / `*Error` 型         |
+| `Failure` | Effect の `Cause` 語彙（`Fail` / `Die`）、または失敗の**分類** | `handleFailures` / `logFailure` / `classifyDbFailure` / `RepositoryFailure` |
+
+`handleFailures` が `Failure` なのは、**`Fail` と `Die` の両方**を畳むから
+（`catchAll` + `tapDefect` + `catchAllDefect`）。`handleErrors` にすると
+E チャネルだけに見える。`logFailure` は `logDefect` と対で、
+Effect の `Cause = Fail | Die` にそのまま対応している。
+
+`classifyDbFailure` が `Failure` なのは、戻り値が本当に `RepositoryFailure`
+（`unavailable` / `exhausted` / `contention` / …）だから。一方
+`handleDbError` が返すのは `RepositoryError` なので `Error`。
+**名前は戻り値に合わせる。**
+
+> かつては `handleDbFailure` / `handleMailAddressDuplication` だった。前者は
+> `RepositoryError` を返すのに `Failure` と名乗っていて、`classifyDbFailure` と
+> 区別が付かなかった。後者は**エラーを扱うことが名前から読めず**、「重複を検出するのか
+> 防ぐのか変換するのか」が分からなかった。2026-08-11 に改めた。
 
 成功側は `SuccessResponse`（`Ok` / `Created` / `NoContent`）が対になる。
 `handle*` の一族に入れていないのは、**失敗を直しているわけではない**から。
 
 `handleErrorResponse` と `handleFailures` は**形が違う**。前者はエラー 1 つを応答へ写す
 純粋な関数で、後者は Effect の失敗と defect をまとめて応答へ畳む pipeable
-（`handleDbFailure` と同じ立ち位置）。名詞が違うので取り違えようがない。
+（`handleDbError` と同じ立ち位置）。名詞が違うので取り違えようがない。
 
-`handleDbFailure` は当初 `dbQuery` という名前で、Promise を作る関数を受け取るラッパだった。
+`handleDbError` は当初 `dbQuery` という名前で、Promise を作る関数を受け取るラッパだった。
 **名前が引数を説明していて、自分の仕事を説明していなかった**ため改めた。
 `try` は渡されたものを素通しするだけで、存在理由は `catch` 側にしかない。
 
@@ -191,7 +215,7 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 `updatePassword` や `deleteById` も「書き込み」なのに使っておらず、
 **そのズレをコメントで釈明していた**。コメントで名前を弁解し始めたら名前が負けている。
 
-`handleMailAddressDuplication` はドメインサービスの `checkMailAddressDuplication` と
+`handleMailAddressDuplicationError` はドメインサービスの `checkMailAddressDuplication` と
 **名詞を揃えてある**。動詞だけが違う（書く前に確かめる / すり抜けたものを捕まえる）ので、
 二段構えの設計が名前だけで読める。
 
@@ -199,8 +223,8 @@ infrastructure/drizzle-schema.ts   テーブル定義（export: tUser）
 
 ```ts
 Effect.tryPromise(() => db.update(tUser).set({ ... }).where(...))
-  .pipe(handleDbFailure) // DB 例外 → RepositoryError
-  .pipe(handleMailAddressDuplication(user)) // 一意制約違反 → 409
+  .pipe(handleDbError) // DB 例外 → RepositoryError
+  .pipe(handleMailAddressDuplicationError(user)) // 一意制約違反 → 409
   .pipe(Effect.asVoid);
 ```
 
@@ -228,7 +252,7 @@ Schema.String.pipe(
 > 指摘を出す。正しさではなく読み味の話なので、`tsconfig.json` で明示的に切った。
 > 切りすぎていないこと（`floatingEffect` などが今も検出されること）は確認済み。
 
-`handleDbFailure` は当初 `Effect.tryPromise` を内側に隠すラッパだった。やめた理由は、
+`handleDbError` は当初 `Effect.tryPromise` を内側に隠すラッパだった。やめた理由は、
 **汎用の翻訳だけがラッパになり、集約固有の翻訳が pipe になる**という食い違いが生まれるから。
 同じ「失敗の翻訳」なのに形が 2 種類あると、名前を揃えた意味が薄れる。
 持ち上げ → 翻訳 → 翻訳、と並べば読む順と処理の順が一致する。
@@ -243,7 +267,7 @@ application も presentation も影響を受けない。
 （同じ Promise を await し直しても結果は変わらない）。
 `RepositoryFailure.Contention` を「リトライで直りうる」と分類している以上、これは他人事ではない。
 
-`handleDbFailure` が `UnknownException` から `error` を取り出して渡しているのは、
+`handleDbError` が `UnknownException` から `error` を取り出して渡しているのは、
 `classifyDbFailure` と `isSqlStateViolation` が `cause` を辿って PostgresError を探すため。
 包みを増やさず、ドライバが投げた例外そのものを渡している。
 
@@ -771,14 +795,14 @@ changeUserPassword  → updatePassword   （hashedPassword / updatedAt を書く
 
 ### 一意性は事前チェックと DB 制約の二段構えで守る
 
-`checkMailAddressDuplication`（ドメインサービス）と、`UserRepositoryLive` の `handleMailAddressDuplication`
+`checkMailAddressDuplication`（ドメインサービス）と、`UserRepositoryLive` の `handleMailAddressDuplicationError`
 （一意制約違反 → `MailAddressAlreadyExistsError`）は**どちらも 409 を出す**。
 重複に見えるが、**役割が違うので両方要る**。
 
-|                                | 役割                                     | いつ効くか        |
-| ------------------------------ | ---------------------------------------- | ----------------- |
-| `checkMailAddressDuplication`  | 業務ルールをドメインで表明し、安く答える | 普段（実質 100%） |
-| `handleMailAddressDuplication` | 同時実行でも契約どおりの 409 を返す      | 競合時のみ        |
+|                                     | 役割                                     | いつ効くか        |
+| ----------------------------------- | ---------------------------------------- | ----------------- |
+| `checkMailAddressDuplication`       | 業務ルールをドメインで表明し、安く答える | 普段（実質 100%） |
+| `handleMailAddressDuplicationError` | 同時実行でも契約どおりの 409 を返す      | 競合時のみ        |
 
 事前チェックは**読んでから書くまでに隙間がある**（TOCTOU）。しかも `createUser` は
 チェックの後に argon2id のハッシュ化を挟むため、**窓が 100ms 前後まで開く**。
@@ -795,7 +819,7 @@ changeUserPassword  → updatePassword   （hashedPassword / updatedAt を書く
 
 逆に、どちらか一方を消すとこうなる。
 
-- **`handleMailAddressDuplication` を消す**: データは守られるが、競合時の応答が 409 から 500 に劣化する。
+- **`handleMailAddressDuplicationError` を消す**: データは守られるが、競合時の応答が 409 から 500 に劣化する。
   契約違反であり、クライアントは「入力を直す」べきか「再試行する」べきかを判断できない。
 - **事前チェックを消す**: 業務ルールの記述がマイグレーションの SQL だけになり、
   ドメインを読んでも「同じメールアドレスの人は 2 人いない」が分からなくなる。

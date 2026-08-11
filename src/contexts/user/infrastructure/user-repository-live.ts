@@ -5,7 +5,7 @@ import { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-alre
 import type { RepositoryError } from "~/shared/errors/repository-error";
 import { Database } from "~/shared/infrastructure/db/client";
 import { SqlState } from "~/shared/infrastructure/db/error/constants/sql-state";
-import { handleDbFailure } from "~/shared/infrastructure/db/error/handle-db-failure";
+import { handleDbError } from "~/shared/infrastructure/db/error/handle-db-error";
 import { isSqlStateViolation } from "~/shared/infrastructure/db/error/postgres-error-reader";
 
 import { User } from "../domain/model/user";
@@ -18,13 +18,13 @@ const MAIL_ADDRESS_UNIQUE_CONSTRAINT = "t_user_mail_address_lower_unique";
 
 /**
  * 一意制約違反を MailAddressAlreadyExistsError (409) に翻訳する。
- * handleDbFailure の上に pipe で積んで使う (翻訳の段数がそのまま並ぶ)。
+ * handleDbError の上に pipe で積んで使う (翻訳の段数がそのまま並ぶ)。
  *
  * アプリ側の事前チェックをすり抜けた同時実行 (TOCTOU) を DB の制約が捕まえる
  * 「最後の砦」の経路。他の失敗は RepositoryError (500) のまま素通しする。
- * 制約名も翻訳先も user 固有のため handleDbFailure のようには共有しない。
+ * 制約名も翻訳先も user 固有のため handleDbError のようには共有しない。
  */
-const handleMailAddressDuplication =
+const handleMailAddressDuplicationError =
   (user: User) =>
   <A, R>(
     effect: Effect.Effect<A, RepositoryError, R>,
@@ -76,8 +76,8 @@ export const UserRepositoryLive = Layer.effect(
             updatedAt: user.updatedAt,
           }),
         )
-          .pipe(handleDbFailure)
-          .pipe(handleMailAddressDuplication(user))
+          .pipe(handleDbError)
+          .pipe(handleMailAddressDuplicationError(user))
           .pipe(Effect.asVoid),
 
       // set に並べるのは「その遷移が変える項目」だけ。触らない列を書き戻さないことが
@@ -93,8 +93,8 @@ export const UserRepositoryLive = Layer.effect(
             })
             .where(eq(tUser.id, user.id)),
         )
-          .pipe(handleDbFailure)
-          .pipe(handleMailAddressDuplication(user))
+          .pipe(handleDbError)
+          .pipe(handleMailAddressDuplicationError(user))
           .pipe(Effect.asVoid),
 
       // メールアドレスを書かないので一意制約違反は起こりえない (翻訳を積まない)。
@@ -108,14 +108,14 @@ export const UserRepositoryLive = Layer.effect(
             })
             .where(eq(tUser.id, user.id)),
         )
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.asVoid),
 
       findById: (id) =>
         Effect.tryPromise(() =>
           db.select().from(tUser).where(eq(tUser.id, id)).limit(1),
         )
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.flatMap(toDomainHead)),
 
       // 大小を無視して引く。保存は入力どおりなので eq では
@@ -130,12 +130,12 @@ export const UserRepositoryLive = Layer.effect(
             .where(sql`lower(${tUser.mailAddress}) = lower(${mailAddress})`)
             .limit(1),
         )
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.flatMap(toDomainHead)),
 
       deleteById: (id) =>
         Effect.tryPromise(() => db.delete(tUser).where(eq(tUser.id, id)))
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.asVoid),
     };
   }),

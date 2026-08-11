@@ -29,7 +29,7 @@ import { logDefect, logFailure } from "./log-failure";
  *
  * `handleErrorResponse` との違いは形。あちらは **エラー 1 つを応答へ写す純粋な表**で、
  * こちらは **Effect の失敗経路そのものを畳む pipeable**。
- * `infrastructure` の `handleDbFailure` と同じ立ち位置にある。
+ * `infrastructure` の `handleDbError` と同じ立ち位置にある。
  */
 export const handleFailures =
   (c: Context, requestId: string) =>

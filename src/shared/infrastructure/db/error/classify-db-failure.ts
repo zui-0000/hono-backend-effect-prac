@@ -20,7 +20,7 @@ const findKnownErrorCode = (error: unknown): string | undefined =>
 /**
  * DB 由来の例外を、ログ用の内訳へ分類する。
  *
- * 呼ぶのは infrastructure 層だけ (RepositoryError を組み立てる handleDbFailure)。
+ * 呼ぶのは infrastructure 層だけ (RepositoryError を組み立てる handleDbError)。
  * 分岐のためではなくログのための情報なので、分類できなければ Unknown で構わない
  * — 外に出る応答は、どの内訳でも同じ 500 になる。
  *

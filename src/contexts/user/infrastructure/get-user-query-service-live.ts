@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { Effect, Layer, Option } from "effect";
 
 import { Database } from "~/shared/infrastructure/db/client";
-import { handleDbFailure } from "~/shared/infrastructure/db/error/handle-db-failure";
+import { handleDbError } from "~/shared/infrastructure/db/error/handle-db-error";
 
 import { GetUserQueryService } from "../application/get-user-query-service";
 import { tUser } from "./drizzle-schema";
@@ -28,7 +28,7 @@ export const GetUserQueryServiceLive = Layer.effect(
             .where(eq(tUser.id, id))
             .limit(1),
         )
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.map((rows) => Option.fromNullable(rows[0]))),
     };
   }),

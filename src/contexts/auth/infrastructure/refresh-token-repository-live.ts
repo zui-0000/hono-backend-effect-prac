@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
 
 import { Database } from "~/shared/infrastructure/db/client";
-import { handleDbFailure } from "~/shared/infrastructure/db/error/handle-db-failure";
+import { handleDbError } from "~/shared/infrastructure/db/error/handle-db-error";
 
 import { RefreshToken, RevokedReason } from "../domain/model/refresh-token";
 import { RefreshTokenRepository } from "../domain/refresh-token-repository";
@@ -39,7 +39,7 @@ export const RefreshTokenRepositoryLive = Layer.effect(
     return {
       create: (token) =>
         Effect.tryPromise(() => db.insert(tRefreshToken).values(toRow(token)))
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.asVoid),
 
       findByTokenHash: (tokenHash) =>
@@ -50,7 +50,7 @@ export const RefreshTokenRepositoryLive = Layer.effect(
             .where(eq(tRefreshToken.tokenHash, tokenHash))
             .limit(1),
         )
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.flatMap(toDomainHead)),
 
       // 失効と発行を 1 トランザクションで行う。間で落ちるとクライアントは
@@ -69,7 +69,7 @@ export const RefreshTokenRepositoryLive = Layer.effect(
             await tx.insert(tRefreshToken).values(toRow(issued));
           }),
         )
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.asVoid),
 
       // **セッションの行すべてを対象にする。** 既に失効している行も含めて理由を
@@ -88,7 +88,7 @@ export const RefreshTokenRepositoryLive = Layer.effect(
             })
             .where(eq(tRefreshToken.sessionId, sessionId)),
         )
-          .pipe(handleDbFailure)
+          .pipe(handleDbError)
           .pipe(Effect.asVoid),
     };
   }),

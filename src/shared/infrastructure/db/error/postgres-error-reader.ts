@@ -62,7 +62,7 @@ export const findPostgresError = (
  * constraint を渡した場合はその制約名に一致するものだけを対象にする。
  *
  * 制約違反をドメインのエラーへ翻訳する側 (例: UserRepositoryLive の
- * handleMailAddressDuplication) が使う。分類 (classify-db-failure.ts) とは経路が別で、
+ * handleMailAddressDuplicationError) が使う。分類 (classify-db-failure.ts) とは経路が別で、
  * あちらはログのための丸め、こちらは応答を変えるための判定。
  */
 export const isSqlStateViolation = (

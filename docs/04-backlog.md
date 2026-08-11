@@ -303,20 +303,20 @@ HTTP 境界のテストは 1 行も変えずに通り続けた（安定した縫
 
 ### まだ埋まっていない穴
 
-| 対象                             | 何が未検証か                                     | 壊れたときに起きること                    |
-| -------------------------------- | ------------------------------------------------ | ----------------------------------------- |
-| `validateQuery`                  | **一度も実行されていない**                       | クエリ検証が丸ごと壊れていても気付けない  |
-| `validateHeader` の失敗経路      | `X-Request-Id` の欠落・形式不正で 400 になること | 相関 ID の無いリクエストが通る            |
-| `UserRepositoryLive` の `set` 句 | 各更新が「その遷移の列」だけを書くこと           | 列をまたぐロストアップデートが復活する    |
-| `handleMailAddressDuplication`   | 制約名が実物と一致すること（実測済み・未自動化） | 制約名が変わると 409 が黙って 500 になる  |
-| `classifyDbFailure` の対応表     | 7 つの内訳のうち 2 つしか実測していない          | ログの内訳が嘘になる（応答は 500 のまま） |
-| **認可**                         | `claims.sub` と対象 id の突き合わせが**無い**    | 他人のリソースを取得・更新・削除できる    |
+| 対象                                | 何が未検証か                                     | 壊れたときに起きること                    |
+| ----------------------------------- | ------------------------------------------------ | ----------------------------------------- |
+| `validateQuery`                     | **一度も実行されていない**                       | クエリ検証が丸ごと壊れていても気付けない  |
+| `validateHeader` の失敗経路         | `X-Request-Id` の欠落・形式不正で 400 になること | 相関 ID の無いリクエストが通る            |
+| `UserRepositoryLive` の `set` 句    | 各更新が「その遷移の列」だけを書くこと           | 列をまたぐロストアップデートが復活する    |
+| `handleMailAddressDuplicationError` | 制約名が実物と一致すること（実測済み・未自動化） | 制約名が変わると 409 が黙って 500 になる  |
+| `classifyDbFailure` の対応表        | 7 つの内訳のうち 2 つしか実測していない          | ログの内訳が嘘になる（応答は 500 のまま） |
+| **認可**                            | `claims.sub` と対象 id の突き合わせが**無い**    | 他人のリソースを取得・更新・削除できる    |
 
 `set` 句は偽のリポジトリでは覆えない（テストが見ているのはポートの呼び分けまで）。
 実 DB でレースを起こして確認したが、その手順は自動化していない。
 手順は [`02-architecture.md`](02-architecture.md#書き込みポートは集約ではなく状態遷移に対応させる) を参照。
 
-`handleMailAddressDuplication` も同じ理由で偽のリポジトリでは覆えない（制約が存在しないため）。
+`handleMailAddressDuplicationError` も同じ理由で偽のリポジトリでは覆えない（制約が存在しないため）。
 さらに厄介なのは、**普段はこの経路を通らない**こと。`createUserCommand` は先に
 `checkMailAddressDuplication` を通すので、通常の重複 POST が出す 409 はドメインサービス由来で、
 そこまで届かない。つまりこの翻訳を丸ごと壊しても**テストは全部通り、手動の疎通確認も
@@ -428,11 +428,11 @@ API テストはステータスと errorCode を `HttpStatus` / `ErrorCode` か�
 ### DB 呼び出しのラッパをどこまで共有するか
 
 DB 呼び出しを包む処理のうち、コンテキストに依存しない
-[`handleDbFailure`](../src/shared/infrastructure/db/error/handle-db-failure.ts) は共有側へ出した。
+[`handleDbError`](../src/shared/infrastructure/db/error/handle-db-error.ts) は共有側へ出した。
 `UserRepositoryLive` と `GetUserQueryServiceLive` の両方が必要としており、
 後者は同じ中身を手で書き直していたため、**既にあった重複を消す**変更でもあった。
 
-`UserRepositoryLive` に残した `handleMailAddressDuplication` は出していない。制約名
+`UserRepositoryLive` に残した `handleMailAddressDuplicationError` は出していない。制約名
 （`t_user_mail_address_unique`）、翻訳先（`MailAddressAlreadyExistsError`）、
 引数（`user.mailAddress` を読むためだけの `User`）の**すべてが user 固有**だから。
 
@@ -446,7 +446,7 @@ DB 呼び出しを包む処理のうち、コンテキストに依存しない
 `toDomainHead`（先頭行を集約に復元し、0 件なら `Option.none`）も残しているが、
 **理由は上と違う**。こちらは一般化した形が機械的に決まる
 （`decodeHead(schema)`）ので、設計の余地という意味では出せる。
-出していないのは**消費者が 1 人しかおらず、`handleDbFailure` と違って消せる重複が無い**から。
+出していないのは**消費者が 1 人しかおらず、`handleDbError` と違って消せる重複が無い**から。
 Query Service 側と重なっているのは `Option.fromNullable(rows[0])` の 1 行だけで、
 そこは Effect の `Array.head` が既に持っている。
 
@@ -525,7 +525,7 @@ export const UserRepositoryLive = Layer.effect(UserRepository,
 > **未経験の領域なので、実例が出るまで形を決めない。** リレーションのある
 > テーブルの一括更新、跨ぐトランザクション、[楽観ロック](#バージョン列楽観ロック)は
 > いずれもこのリポジトリでまだ扱っていない。先に形だけ決めると、
-> 実例が出たときにだいたい合わない（`handleMailAddressDuplication` の一般化を
+> 実例が出たときにだいたい合わない（`handleMailAddressDuplicationError` の一般化を
 > 見送ったのと同じ理由）。
 
 ### バージョン列（楽観ロック）
@@ -651,7 +651,7 @@ SQLSTATE が `errno` に入ること、`ERR_POSTGRES_*` が bun 1.3.14 のバイ
 `pg` 系 + `@effect/sql` 系まで広がる。
 
 得られるものも数えた。`Effect.tryPromise` は消えるが、`SqlError → RepositoryError` の
-翻訳は結局書くので `handleDbFailure` 相当は残る（中身が入れ替わるだけ）。
+翻訳は結局書くので `handleDbError` 相当は残る（中身が入れ替わるだけ）。
 **本命だった「`db` を Layer にする」ほうは、この統合を入れなくても達成できた**
 （[`02-architecture.md`](02-architecture.md#db-接続も-layer-で注入する)）。
 残る利点は「アダプタの記述がわずかに短くなる」程度。
