@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect, Option } from "effect";
 
 import { makeRuntime } from "~/__mocks__/app-runtime";
-import { FIXED_UUID, headers } from "~/__mocks__/data";
+import { FIXED_UUID, headers, OTHER_UUID } from "~/__mocks__/data";
 import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
 import type { GetUserQueryOutput } from "~/contexts/user/application/get-user-query-service";
@@ -65,6 +65,30 @@ describe(getUserController.name, () => {
         message: ErrorMessage.BadRequest,
         details: [{ field: "id", message: expect.any(String) }],
       });
+    });
+  });
+  describe("認可", () => {
+    test("他人の id を指定した場合、403 (errorCode 4030) を返し、クエリを実行しないこと", async () => {
+      // 対象の存在を確かめる前に落とす = 「認可の失敗は対象の有無に関わらず 403」。
+      let executed = false;
+      const runtime = makeRuntime({
+        getUserQueryService: {
+          execute: () => {
+            executed = true;
+            return Effect.succeed(Option.none());
+          },
+        },
+      });
+
+      // headers の claims は sub = FIXED_UUID。別人の id を狙う。
+      const response = await getUser(runtime, OTHER_UUID);
+
+      expect(response.status).toBe(HttpStatus.Forbidden);
+      expect(await response.json()).toStrictEqual({
+        errorCode: ErrorCode.Forbidden,
+        message: ErrorMessage.Forbidden,
+      });
+      expect(executed).toBe(false);
     });
   });
 });

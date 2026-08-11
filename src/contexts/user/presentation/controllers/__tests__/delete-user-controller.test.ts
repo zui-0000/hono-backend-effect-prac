@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect, Option } from "effect";
 
 import { makeRuntime } from "~/__mocks__/app-runtime";
-import { FIXED_UUID, headers, makeUser } from "~/__mocks__/data";
+import { FIXED_UUID, headers, makeUser, OTHER_UUID } from "~/__mocks__/data";
 import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
 import type { UserId } from "~/contexts/user/domain/model/value-objects/user-id";
@@ -74,6 +74,29 @@ describe(deleteUserController.name, () => {
         message: ErrorMessage.BadRequest,
         details: [{ field: "id", message: expect.any(String) }],
       });
+    });
+  });
+  describe("認可", () => {
+    test("他人の id を指定した場合、403 (errorCode 4030) を返し、削除しないこと", async () => {
+      const deleted: string[] = [];
+      const runtime = makeRuntime({
+        userRepository: {
+          findById: () => Effect.succeed(Option.some(makeUser())),
+          deleteById: (id) =>
+            Effect.sync(() => {
+              deleted.push(id);
+            }),
+        },
+      });
+
+      const response = await deleteUser(runtime, OTHER_UUID);
+
+      expect(response.status).toBe(HttpStatus.Forbidden);
+      expect(await response.json()).toStrictEqual({
+        errorCode: ErrorCode.Forbidden,
+        message: ErrorMessage.Forbidden,
+      });
+      expect(deleted).toStrictEqual([]);
     });
   });
 });

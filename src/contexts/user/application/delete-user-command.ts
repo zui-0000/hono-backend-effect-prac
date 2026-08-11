@@ -1,10 +1,12 @@
 import { Effect, Schema } from "effect";
 
 import { orNotFound } from "~/shared/application/or-not-found";
+import { ForbiddenError } from "~/shared/errors/forbidden-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 import type { ResourceNotFoundError } from "~/shared/errors/resource-not-found-error";
 
 import { UserId } from "../domain/model/value-objects/user-id";
+import { checkUserIsSelf } from "../domain/services/check-user-is-self";
 import { UserRepository } from "../domain/user-repository";
 
 /**
@@ -14,14 +16,16 @@ import { UserRepository } from "../domain/user-repository";
  */
 export const DeleteUserCommandInput = Schema.Struct({
   id: UserId,
+  actor: UserId,
 });
 export type DeleteUserCommandInput = typeof DeleteUserCommandInput.Type;
 
 /**
  * ユーザーを削除する (CQRS のコマンド)。
  *
- * 1. 対象の存在確認 (存在しなければ 404)
- * 2. リポジトリから削除
+ * 1. 対象が本人か検証 (他人なら 404。存在も漏らさない)
+ * 2. 対象の存在確認 (存在しなければ 404)
+ * 3. リポジトリから削除
  *
  * 削除前に存在確認するのは、API 契約が 404 を返すと定めているから。
  * ポートの deleteById は「その ID の行が無い状態」だけを保証し、
@@ -35,15 +39,18 @@ export const deleteUserCommand = (
   input: DeleteUserCommandInput,
 ): Effect.Effect<
   void,
-  ResourceNotFoundError | RepositoryError,
+  ForbiddenError | ResourceNotFoundError | RepositoryError,
   UserRepository
 > =>
   Effect.gen(function* () {
     const userRepository = yield* UserRepository;
 
-    // 1. 存在確認 (復元した集約は使わず、居ることだけを確かめる)
+    // 1. 本人か検証 (他人なら 404)
+    yield* checkUserIsSelf(input.id, input.actor);
+
+    // 2. 存在確認 (復元した集約は使わず、居ることだけを確かめる)
     yield* userRepository.findById(input.id).pipe(orNotFound);
 
-    // 2. 削除
+    // 3. 削除
     yield* userRepository.deleteById(input.id);
   });

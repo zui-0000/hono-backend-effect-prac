@@ -107,6 +107,26 @@ export default {
       },
     },
     {
+      name: "presentation-not-to-context-domain",
+      severity: "error",
+      comment: message({
+        violation: "presentation 層が contexts/<ctx>/domain を参照しています。",
+        reason:
+          "presentation の仕事は「入力を DTO に組み立てて application へ渡す」ことだけです。\n" +
+          "ドメインに手が届くと、認可やリポジトリ呼び出しを controller / routes に\n" +
+          "書けてしまいます。認可は業務ルールなのでユースケースとドメインの側にあるべきで、\n" +
+          "経路ごとに散ると修正漏れの温床になります (`docs/02-architecture.md` の認可の節)。",
+        fix:
+          "値オブジェクトが要るなら application の入力スキーマ (XxxCommandInput /\n" +
+          "XxxQueryInput) を decodeInput に通します。判定が要るなら\n" +
+          "application の関数を 1 本呼び、その中でドメインサービスを使います。",
+      }),
+      from: {
+        path: "^src/(contexts/[^/]+|shared)/presentation/",
+      },
+      to: { path: "^src/contexts/[^/]+/domain/" },
+    },
+    {
       name: "presentation-not-to-impl",
       severity: "error",
       comment: message({

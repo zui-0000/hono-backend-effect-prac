@@ -185,6 +185,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: 操作する権限が無い (汎用)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
         '404':
           description: リソースが見つからない (汎用)
           content:
@@ -226,6 +232,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: 操作する権限が無い (汎用)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
         '404':
           description: リソースが見つからない (汎用)
           content:
@@ -279,6 +291,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: 操作する権限が無い (汎用)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
         '404':
           description: リソースが見つからない (汎用)
           content:
@@ -321,6 +339,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: 操作する権限が無い (汎用)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
         '404':
           description: リソースが見つからない (汎用)
           content:
@@ -442,6 +466,21 @@ components:
       title: ErrorMessage
       examples:
         - BadRequestError
+    ForbiddenError:
+      type: object
+      required:
+        - errorCode
+        - message
+      properties:
+        errorCode:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          $ref: '#/components/schemas/ErrorMessage'
+      description: 操作する権限が無い (汎用)
+      title: ForbiddenError
+      examples:
+        - errorCode: '4030'
+          message: ForbiddenError
     GetUserResponse:
       type: object
       required:

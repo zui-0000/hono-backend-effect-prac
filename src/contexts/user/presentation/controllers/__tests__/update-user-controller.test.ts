@@ -163,4 +163,26 @@ describe(updateUserController.name, () => {
       });
     });
   });
+  describe("認可", () => {
+    test("他人の id を指定した場合、403 (errorCode 4030) を返し、集約を読まないこと", async () => {
+      let read = false;
+      const runtime = makeRuntime({
+        userRepository: {
+          findById: () => {
+            read = true;
+            return Effect.succeed(Option.some(makeUser()));
+          },
+        },
+      });
+
+      const response = await putUser(runtime, OTHER_UUID, requestBody);
+
+      expect(response.status).toBe(HttpStatus.Forbidden);
+      expect(await response.json()).toStrictEqual({
+        errorCode: ErrorCode.Forbidden,
+        message: ErrorMessage.Forbidden,
+      });
+      expect(read).toBe(false);
+    });
+  });
 });

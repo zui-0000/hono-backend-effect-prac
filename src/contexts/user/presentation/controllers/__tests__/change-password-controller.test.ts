@@ -9,6 +9,7 @@ import {
   FIXED_UUID,
   headers,
   makeUser,
+  OTHER_UUID,
 } from "~/__mocks__/data";
 import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
@@ -152,6 +153,29 @@ describe(changePasswordController.name, () => {
         message: ErrorMessage.BadRequest,
         details: [{ field: "newPassword", message: expect.any(String) }],
       });
+    });
+  });
+  describe("認可", () => {
+    test("他人の id を指定した場合、403 (errorCode 4030) を返し、集約を読まないこと", async () => {
+      // 現在のパスワード照合 (401) より前に落ちること。守りを 2 枚にしている。
+      let read = false;
+      const runtime = makeRuntime({
+        userRepository: {
+          findById: () => {
+            read = true;
+            return Effect.succeed(Option.some(makeUser()));
+          },
+        },
+      });
+
+      const response = await putPassword(runtime, OTHER_UUID, requestBody);
+
+      expect(response.status).toBe(HttpStatus.Forbidden);
+      expect(await response.json()).toStrictEqual({
+        errorCode: ErrorCode.Forbidden,
+        message: ErrorMessage.Forbidden,
+      });
+      expect(read).toBe(false);
     });
   });
 });

@@ -15,6 +15,12 @@ model UnauthorizedErrorResponse {
   @body error: UnauthorizedError;
 }
 
+/** 操作する権限が無い (汎用) */
+model ForbiddenErrorResponse {
+  @statusCode statusCode: 403;
+  @body error: ForbiddenError;
+}
+
 /** リソースが見つからない (汎用) */
 model NotFoundErrorResponse {
   @statusCode statusCode: 404;

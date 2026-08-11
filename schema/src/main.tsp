@@ -33,6 +33,7 @@ namespace BackendApi {
       | SuccessOkResponse<GetUserResponse>
       | BadRequestErrorResponse
       | UnauthorizedErrorResponse
+      | ForbiddenErrorResponse
       | NotFoundErrorResponse
       | InternalServerErrorResponse;
 
@@ -49,6 +50,7 @@ namespace BackendApi {
       | SuccessNoContentResponse
       | BadRequestErrorResponse
       | UnauthorizedErrorResponse
+      | ForbiddenErrorResponse
       | NotFoundErrorResponse
       | MailAddressAlreadyExistsErrorResponse
       | InternalServerErrorResponse;
@@ -62,6 +64,7 @@ namespace BackendApi {
       | SuccessNoContentResponse
       | BadRequestErrorResponse
       | UnauthorizedErrorResponse
+      | ForbiddenErrorResponse
       | NotFoundErrorResponse
       | InternalServerErrorResponse;
 
@@ -78,6 +81,7 @@ namespace BackendApi {
       | SuccessNoContentResponse
       | BadRequestErrorResponse
       | UnauthorizedErrorResponse
+      | ForbiddenErrorResponse
       | NotFoundErrorResponse
       | InternalServerErrorResponse;
   }

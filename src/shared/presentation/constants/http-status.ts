@@ -24,6 +24,7 @@ export const HttpStatus = {
   /** 401 認証情報が不正 */
   Unauthorized: 401,
   /** 404 リソースが存在しない */
+  Forbidden: 403,
   NotFound: 404,
   /** 409 リソースの現在の状態と衝突する */
   Conflict: 409,

@@ -26,11 +26,17 @@ oxlint は import 文の文字列しか見ないため、相対パスと `~/` �
 | **domain**                                         |   —    |      ✗      |       ✗        |      ✗       |      ✗      |
 | **application**                                    |   ✓    |      —      |       ✗        |      ✗       |      ✗      |
 | **infrastructure**                                 |   ✓    |      ✓      |       —        |      ✗       |      ✗      |
-| **presentation**                                   |   ✓    |      ✓      |       ✗        |      —       |      ✓      |
+| **presentation**                                   |  ✓\*   |      ✓      |       ✗        |      —       |      ✓      |
 | **shared のポート側**（domain/application/errors） |   ✗    |      ✗      |       ✗        |      ✗       |      ✗      |
 | **`<ctx>-layer.ts`**（提供側）                     |   ✓    |      ✓      |       ✓        |      ✓       |      ✗      |
 | **`src/app-runtime.ts`**（合成ルート）             |   ✓    |      ✓      |       ✓        |      ✓       |      ✗      |
 
+- **`✓*`（presentation → domain）は `shared/domain` だけ。** `contexts/<ctx>/domain/` は
+  `presentation-not-to-context-domain` で禁じている。手が届くと認可やリポジトリ呼び出しを
+  controller / routes に書けてしまい、業務ルールが経路ごとに散る。
+  値オブジェクトが要るなら application の入力スキーマを `decodeInput` に通し、
+  判定が要るなら application の関数を呼ぶ（[`02-architecture.md`](02-architecture.md) の認可の節）。
+  許すのは `shared/domain` の横断ポート（`access-token-issuer` / `uuid-generator`）のみ。
 - `generated`（API 契約の生成コード）に触れるのは **presentation だけ**。
   契約の型が内側へ漏れると、契約を変えるたびにドメインまで書き換えが波及する。
 - **Drizzle に触れるのは infrastructure だけ**。これは `infrastructure` 列がそのまま担っている。

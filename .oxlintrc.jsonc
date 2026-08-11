@@ -147,13 +147,17 @@
       },
     },
     {
-      // presentation は生成スキーマを使ってよい唯一の層。ただし実装は掴まない。
+      // presentation は生成スキーマを使ってよい唯一の層。ただし実装もドメインも掴まない。
       "files": ["src/contexts/*/presentation/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
+              {
+                "group": ["**/contexts/*/domain/**", "../domain/**"],
+                "message": "presentation は contexts の domain を知りません。値オブジェクトが要るなら application の入力スキーマ (XxxCommandInput / XxxQueryInput) を decodeInput に通し、判定が要るなら application の関数を呼んでください。認可を controller / routes に書くと経路ごとに散ります。",
+              },
               {
                 "group": [
                   "**/infrastructure/**",

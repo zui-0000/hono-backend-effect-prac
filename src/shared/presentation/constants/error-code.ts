@@ -17,6 +17,8 @@ export const ErrorCode = {
   BadRequest: "4000",
   /** 401 認証情報が不正 (汎用) */
   Unauthorized: "4010",
+  /** 403 操作する権限が無い (汎用) */
+  Forbidden: "4030",
   /** 404 リソースが存在しない (汎用。経路の打ち間違いもここに含める) */
   ResourceNotFound: "4040",
   /** 409 リソースの現在の状態と衝突する (汎用) */

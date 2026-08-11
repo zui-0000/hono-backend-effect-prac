@@ -15,9 +15,17 @@ import { UserId } from "../domain/model/value-objects/user-id";
  * `UserId` (ドメインの値オブジェクト) を使うのは、`VerifyCredentialsQueryService` が
  * 既に `Option<UserId>` を返しているのと同じ理由。**クエリ経路が domain を経由しない**のは
  * 集約を復元しないという意味であって、ドメインの語彙を使わないという意味ではない。
+ *
+ * `actor` は認可の主体 (アクセストークンの `sub`)。**照合はユースケース
+ * (`getUserQuery`) が行い、ポートには渡さない。** 「引く範囲を絞る」形も検討したが、
+ * それだと認可の失敗が 0 件 → 404 になり、「認可の失敗は対象の有無に関わらず 403」
+ * という規則から外れる。ポートはデータの取り出しだけを担い、認可を知らない。
  */
-export const GetUserQueryInput = Schema.Struct({ id: UserId });
+export const GetUserQueryInput = Schema.Struct({ id: UserId, actor: UserId });
 export type GetUserQueryInput = typeof GetUserQueryInput.Type;
+
+/** ポートがデータを引くために必要な値。認可の主体は含まない。 */
+export type GetUserQueryParams = { readonly id: UserId };
 
 /**
  * getUser クエリの結果。ドメインの User 集約ではなく読み取り専用の射影で、
@@ -42,9 +50,12 @@ export type GetUserQueryOutput = {
  * 実装 (SQL を書く Layer) は infrastructure 層に置く。
  */
 export interface GetUserQueryService {
-  /** id でユーザーを取得する (存在しなければ Option.none)。 */
+  /**
+   * id でユーザーを取得する (存在しなければ Option.none)。
+   * 認可は済んでいる前提で、`actor` は受け取らない。
+   */
   readonly execute: (
-    input: GetUserQueryInput,
+    params: GetUserQueryParams,
   ) => Effect.Effect<Option.Option<GetUserQueryOutput>, RepositoryError>;
 }
 export const GetUserQueryService = Context.GenericTag<GetUserQueryService>(

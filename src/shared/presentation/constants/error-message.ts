@@ -23,6 +23,7 @@ export const ErrorMessage = {
   /** 401 認証に失敗した (どこで失敗したかは書き分けない) */
   Unauthorized: "認証情報が正しくありません",
   /** 404 指定されたリソースが存在しない (汎用) */
+  Forbidden: "この操作を行う権限がありません",
   NotFound: "指定されたリソースは存在しません",
   /** 409 メールアドレスの重複 */
   MailAddressAlreadyExists: "メールアドレスが既に使用されています",

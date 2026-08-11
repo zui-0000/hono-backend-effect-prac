@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { BadRequestError } from "~/shared/errors/bad-request-error";
 import type { ConflictError } from "~/shared/errors/conflict-error";
 import type { ErrorDetail } from "~/shared/errors/error-detail";
+import type { ForbiddenError } from "~/shared/errors/forbidden-error";
 import type { MailAddressAlreadyExistsError } from "~/shared/errors/mail-address-already-exists-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 import type { ResourceNotFoundError } from "~/shared/errors/resource-not-found-error";
@@ -24,6 +25,8 @@ export type ApplicationError =
   | BadRequestError
   // 401
   | UnauthorizedError
+  // 403
+  | ForbiddenError
   // 404
   | ResourceNotFoundError
   // 409
@@ -113,6 +116,21 @@ export const handleErrorResponse = (
         body: errorBody({
           errorCode: ErrorCode.Unauthorized,
           message: ErrorMessage.Unauthorized,
+        }),
+      };
+
+    // ---- 403 Forbidden (汎用) ----
+    // **対象が存在するかどうかに関わらず 403。** 認可の失敗と不在を混ぜない。
+    // RFC 9110 §15.5.4 は「存在を隠したいなら 404 でもよい」と認めており
+    // (GitHub がプライベートリポジトリでそうしている)、一度その形にもした。
+    // それでも 403 に戻したのは、404 に畳むと「無かった」のか「見せてもらえなかった」のかを
+    // クライアントが永久に区別できなくなるから。引き換えに実在の有無は漏れる。
+    case "ForbiddenError":
+      return {
+        status: HttpStatus.Forbidden,
+        body: errorBody({
+          errorCode: ErrorCode.Forbidden,
+          message: ErrorMessage.Forbidden,
         }),
       };
 
