@@ -60,7 +60,7 @@ export const refreshCommand = (
   | UuidGenerator
 > =>
   Effect.gen(function* () {
-    const repository = yield* RefreshTokenRepository;
+    const refreshTokenRepository = yield* RefreshTokenRepository;
     const refreshTokenIssuer = yield* RefreshTokenIssuer;
 
     // 1. 券そのものは保存していないので、ハッシュに直してから引く。
@@ -69,7 +69,7 @@ export const refreshCommand = (
       .pipe(Effect.flatMap(Schema.decode(RefreshTokenHash)))
       .pipe(Effect.orDie);
 
-    const stored = yield* repository.findByTokenHash(presentedHash);
+    const stored = yield* refreshTokenRepository.findByTokenHash(presentedHash);
     if (Option.isNone(stored)) {
       return yield* new UnauthorizedError();
     }
@@ -94,7 +94,7 @@ export const refreshCommand = (
       // 猶予期間を入れてもなお誤検出が起こりうるため (時計のずれ、遅い経路)。
       case RefreshTokenState.Reused: {
         const revokedAt = yield* now;
-        yield* repository.revokeSession({
+        yield* refreshTokenRepository.revokeSession({
           sessionId: current.sessionId,
           revokedAt,
         });
@@ -126,7 +126,7 @@ const rotate = (
   | UuidGenerator
 > =>
   Effect.gen(function* () {
-    const repository = yield* RefreshTokenRepository;
+    const refreshTokenRepository = yield* RefreshTokenRepository;
     const refreshTokenIssuer = yield* RefreshTokenIssuer;
     const accessTokenIssuer = yield* AccessTokenIssuer;
 
@@ -140,7 +140,7 @@ const rotate = (
     });
 
     // 失効と発行は 1 つの単位。間で落ちるとクライアントは再ログインしか道が無くなる。
-    yield* repository.rotate({
+    yield* refreshTokenRepository.rotate({
       revoked: yield* revokeRefreshToken(current, RevokedReason.Rotated),
       issued,
     });

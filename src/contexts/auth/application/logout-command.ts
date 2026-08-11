@@ -40,9 +40,9 @@ export const logoutCommand = (
   input: LogoutCommandInput,
 ): Effect.Effect<void, RepositoryError, RefreshTokenRepository> =>
   Effect.gen(function* () {
-    const repository = yield* RefreshTokenRepository;
+    const refreshTokenRepository = yield* RefreshTokenRepository;
 
-    yield* repository.revokeSession({
+    yield* refreshTokenRepository.revokeSession({
       sessionId: input.sessionId,
       revokedAt: yield* now,
     });

@@ -59,7 +59,7 @@ export const loginCommand = (
 > =>
   Effect.gen(function* () {
     const verifyCredentials = yield* VerifyCredentialsQueryService;
-    const repository = yield* RefreshTokenRepository;
+    const refreshTokenRepository = yield* RefreshTokenRepository;
     const refreshTokenIssuer = yield* RefreshTokenIssuer;
     const accessTokenIssuer = yield* AccessTokenIssuer;
 
@@ -73,7 +73,7 @@ export const loginCommand = (
     // 2. ログインごとに新しいセッション。1 セッション = 1 デバイスの単位になる。
     const sessionId = yield* generateSessionId;
     const issued = yield* refreshTokenIssuer.issue;
-    yield* repository.create(
+    yield* refreshTokenRepository.create(
       yield* issueRefreshToken({
         userId,
         sessionId,
