@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 
 import { MailAddress } from "~/shared/domain/model/value-objects/mail-address";
 import { Password } from "~/shared/domain/model/value-objects/password";
@@ -22,10 +22,23 @@ import { UserRepository } from "../domain/user-repository";
  * その変換を担うのがここ。外の呼び出し側の型を自分のドメインの型へ合わせる、
  * という意味で**これは正しくアダプタの仕事**にあたる。
  *
- * 形式不正 (メールアドレスとして読めない・パスワードが短すぎる) も **Option.none に
- * まとめる**。ここで 400 と 401 を書き分けると「その形式は受け付ける = 存在しうる」
- * という情報を与えてしまう。契約スキーマの検証は presentation が既に済ませているので、
- * ここへ来るのは形式としては妥当な値のはず。通ってきたら「該当なし」で構わない。
+ * ここでの decode は**検証ではなく変換**。形式の検証は presentation が契約
+ * (`LoginBody`) で済ませており、その制約は値オブジェクトと**同一の値**
+ * (メールアドレス 255 文字・同じ正規表現、パスワード 12〜128 文字)。
+ * それでも decode が要るのは、`verifyCredentials` も `findByMailAddress` も
+ * branded な型を要求するから。
+ *
+ * ## なぜ decode の失敗を orDie にするのか
+ *
+ * 制約が同一である以上、presentation を通った値がここで失敗することはない。
+ * **失敗したら契約と値オブジェクトがズレたということ**で、それはバグ。
+ *
+ * かつては `Option.none` に畳んで 401 にしていた。アカウント列挙を防ぐという
+ * 理由づけだったが、形式の可否は presentation が 400 で先に教えているので
+ * 隠す相手がいない。むしろ**ズレたときに静かな 401 になる**のがまずかった。
+ * 正しいパスワードで入れないうえ、ログには通常の `UnauthorizedError` が出るだけで
+ * 本物の認証失敗と見分けがつかない。orDie なら 500 と defect ログで鳴る。
+ * どのみち利用者が入れないなら、**原因を追える方**を選ぶ。
  *
  * ## なぜ provideService で注ぎ直すのか
  *
@@ -42,20 +55,16 @@ export const VerifyCredentialsQueryServiceLive = Layer.effect(
 
     return {
       execute: ({ mailAddress, password }) =>
-        Effect.gen(function* () {
-          const mail = yield* Schema.decodeUnknown(MailAddress)(
-            mailAddress,
-          ).pipe(Effect.option);
-          const plainText = yield* Schema.decodeUnknown(Password)(
-            password,
-          ).pipe(Effect.option);
-
-          if (Option.isNone(mail) || Option.isNone(plainText)) {
-            return Option.none();
-          }
-
-          return yield* verifyCredentials(mail.value, plainText.value);
-        })
+        Effect.all([
+          Schema.decodeUnknown(MailAddress)(mailAddress),
+          Schema.decodeUnknown(Password)(password),
+        ])
+          .pipe(Effect.orDie)
+          .pipe(
+            Effect.flatMap(([mail, plainText]) =>
+              verifyCredentials(mail, plainText),
+            ),
+          )
           .pipe(Effect.provideService(UserRepository, userRepository))
           .pipe(Effect.provideService(PasswordHasher, passwordHasher)),
     };
