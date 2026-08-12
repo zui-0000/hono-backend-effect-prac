@@ -214,6 +214,11 @@ Effect.tryPromise(() => db.select().from(tUser).where(...).limit(1))
 `Effect.asVoid` は「結果を捨てる」以外に言うことがないので名前が要らない。
 ラムダがあるということは**そこに固有のロジックがある**ということで、それには名前が要る。
 
+controller の `.pipe(Effect.flatMap(createUserCommand))` を素のままにしているのも
+この線引きによる。運んでいるのは既に名前を持ったユースケースで、ラムダが無い。
+`runCommand(createUserCommand)` のように包み直しても `Effect.flatMap` の別名が
+増えるだけで、**語彙は増えるのに情報は増えない**。
+
 **呼ばれるのが 1 箇所でも名前を付ける。** 再利用のための抽象化ではなく、
 段を読めるようにするための命名なので、[実例が 1 つの間は抽象化しない](04-backlog.md)とは
 別の話（`takeFirstRow` は 1 箇所でしか使っていない）。
@@ -641,8 +646,23 @@ Layer を組み立てない。そのため `main.ts` で `await runtime.runtime(
 - **出力**はプレーンな型で定義する。既に検証済みの値を返すだけで decode は不要だし、
   応答が契約を満たすかは presentation 層が生成スキーマで検証するので二重に検証しない。
 
-応答ボディの「形」（`{ id: ... }` のようなラップ）は契約側の関心なので持ち込まない。
-presentation が契約の形へ詰め替える。
+### 出力は、中身が 1 つでも record にする
+
+`CreateUserCommandOutput` は当初 `UserId` そのもの（裸の値）だった。
+「`{ id: ... }` というラップは契約側の形だから presentation が詰め替える」という理由づけで。
+
+**2026-08-12 に record へ改めた。その理由づけが `loginCommand` に当てはまらないから。**
+`LoginCommandOutput` は `{ accessToken, refreshToken }` で、これも契約
+（`Login200Response`）とそっくり同じ形なのに application 層に置いてあり、
+controller は 1 文字も詰め替えていない。**同じ理由が片方にだけ適用されていた。**
+
+揃えた結果、規則が 1 つで言える——**コマンドは Input DTO を受け、Output DTO を返す**。
+入力が `Schema.Struct` なのだから、出口も record でないと対にならない。
+
+契約とたまたま同じ形になるが、合わせにいったわけではない。契約が別の形
+（`{ userId }` や `{ data: { id } }`）へ変わったら、そのとき controller へ
+名前の付いた変換の段を立てて吸収する。**必要になってから置けばよく**、
+それは `loginCommand` にも等しく必要になる話。
 
 ---
 

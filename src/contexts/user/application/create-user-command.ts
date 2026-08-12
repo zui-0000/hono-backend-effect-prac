@@ -29,10 +29,12 @@ export type CreateUserCommandInput = typeof CreateUserCommandInput.Type;
  * id はサーバー側でしか決まらず、返さないとクライアントは作ったリソースを
  * 二度と参照できない (GET /users/{id} を呼べない)。集約そのものは外に出さない。
  *
- * 応答ボディの `{ id: ... }` というラップは契約側の形なので、ここでは id そのものを表す。
- * 詰め替えるのは presentation の責務。
+ * **中身が 1 つでも record にする。** 入力が `CreateUserCommandInput` という DTO なので、
+ * 出口も DTO で受けないと対にならない。`LoginCommandOutput` も同じ形。
+ * 契約の 201 応答とたまたま同じ `{ id }` になるが、合わせにいったわけではない。
+ * 契約が別の形へ変わったら controller に変換の段を立てて吸収する。
  */
-export type CreateUserCommandOutput = UserId;
+export type CreateUserCommandOutput = { readonly id: UserId };
 
 /**
  * ユーザーを新規作成する (CQRS のコマンド)。
@@ -76,5 +78,5 @@ export const createUserCommand = (
     // 4. リポジトリへ永続化
     yield* userRepository.create(user);
 
-    return user.id;
+    return { id: user.id };
   });

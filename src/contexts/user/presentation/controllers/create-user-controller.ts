@@ -17,5 +17,4 @@ type CreateUserControllerInput = { body: typeof CreateUserBody.Type };
 export const createUserController = ({ body }: CreateUserControllerInput) =>
   decodeInput(CreateUserCommandInput)(body)
     .pipe(Effect.flatMap(createUserCommand))
-    .pipe(Effect.map((id) => ({ id })))
     .pipe(SuccessResponse.Created(CreateUser201Response));
