@@ -28,7 +28,7 @@ export type UpdateUserCommandInput = typeof UpdateUserCommandInput.Type;
 /**
  * ユーザーのプロフィールを更新する (CQRS のコマンド)。
  *
- * 1. 対象が本人か検証 (他人なら 404。存在も漏らさない)
+ * 1. 対象が本人か検証 (他人なら 403。存在は見ない)
  * 2. 対象の User 集約を復元 (存在しなければ 404)
  * 3. メールアドレスの重複を事前チェック (UX 用。最後の砦は DB の unique 制約)
  * 4. 集約の状態遷移 (User.changeProfile。updatedAt はドメイン側で進む)
@@ -54,7 +54,7 @@ export const updateUserCommand = (
   Effect.gen(function* () {
     const userRepository = yield* UserRepository;
 
-    // 1. 本人か検証 (他人なら 404)
+    // 1. 本人か検証 (他人なら 403)
     yield* checkUserIsSelf(input.id, input.actor);
 
     // 2. 対象の集約を復元 (存在しなければ 404)

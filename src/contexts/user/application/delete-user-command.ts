@@ -23,7 +23,7 @@ export type DeleteUserCommandInput = typeof DeleteUserCommandInput.Type;
 /**
  * ユーザーを削除する (CQRS のコマンド)。
  *
- * 1. 対象が本人か検証 (他人なら 404。存在も漏らさない)
+ * 1. 対象が本人か検証 (他人なら 403。存在は見ない)
  * 2. 対象の存在確認 (存在しなければ 404)
  * 3. リポジトリから削除
  *
@@ -45,7 +45,7 @@ export const deleteUserCommand = (
   Effect.gen(function* () {
     const userRepository = yield* UserRepository;
 
-    // 1. 本人か検証 (他人なら 404)
+    // 1. 本人か検証 (他人なら 403)
     yield* checkUserIsSelf(input.id, input.actor);
 
     // 2. 存在確認 (復元した集約は使わず、居ることだけを確かめる)

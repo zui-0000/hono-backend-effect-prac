@@ -33,7 +33,7 @@ export type ChangePasswordCommandInput = typeof ChangePasswordCommandInput.Type;
 /**
  * パスワードを変更する (CQRS のコマンド)。
  *
- * 1. 対象が本人か検証 (他人なら 404。存在も漏らさない)
+ * 1. 対象が本人か検証 (他人なら 403。存在は見ない)
  * 2. 対象の User 集約を復元 (存在しなければ 404)
  * 3. 現在のパスワードで本人確認 (一致しなければ 401)
  * 4. 新しいパスワードをハッシュ化 (ドメインは平文を持たない)
@@ -61,7 +61,7 @@ export const changePasswordCommand = (
     const userRepository = yield* UserRepository;
     const passwordHasher = yield* PasswordHasher;
 
-    // 1. 本人か検証 (他人なら 404)
+    // 1. 本人か検証 (他人なら 403)
     yield* checkUserIsSelf(input.id, input.actor);
 
     // 2. 対象の集約を復元
