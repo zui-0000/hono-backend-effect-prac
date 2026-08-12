@@ -1,6 +1,6 @@
 [tools]
-node = "24.18.0" # LTS (Krypton) — pnpm 本体・エディタ/CLI ツール群の土台
-bun = "1.3.14" # アプリの実行ランタイム (Hono をここで動かす)
-pnpm = "11.20.0" # パッケージマネージャ (将来のモノレポ化を見据えて採用)
+node = "24.18.0"
+bun = "1.3.14"
+pnpm = "11.21.0"
 hk = "1.54.1" # git hook + lint ランナー (mise と同じ jdx 製)
 committed = "1.1.11" # コミットメッセージの規約チェック (Conventional Commits)
