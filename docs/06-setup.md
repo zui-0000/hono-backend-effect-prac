@@ -55,7 +55,7 @@ pnpm db:migrate
 3. git hook が入る（`hk install --mise`）
 
 2 のおかげで `pnpm check:types` が Effect 固有の問題も見る
-（[`00-tech-stack.md`](00-tech-stack.md#effect-固有の診断@effecttsgo)）。
+（[`00-tech-stack.md`](00-tech-stack.md#effect-固有の診断effecttsgo)）。
 3 で `git commit` のたびに検査が走るようになる
 （[`00-tech-stack.md`](00-tech-stack.md#コミット前の検査hk)）。
 

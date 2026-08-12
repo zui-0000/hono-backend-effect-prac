@@ -206,7 +206,7 @@ error TS377001: This Effect value is neither yielded nor used in an assignment. 
 
 - **`E`（失敗）** — 何で失敗しうるかが呼び出し側に見える。だから
   「一意性の検証は `check<対象>Duplication`」のように、**名前で失敗を説明しなくてよい**
-  （詳細は [`02-architecture.md`](02-architecture.md#命名-check対象duplication)）。
+  （詳細は [`★ドメインサービス/`](★ドメインサービス/#命名-check対象duplication)）。
 - **`R`（依存）** — I/O を伴うことが型に出る。ドメインサービスがリポジトリのポートを
   読んでも、それが `R` に現れるので「純粋であれ」の戒律を名前や置き場所で守る必要がない。
 - **`A`（成功）** — 封筒を外して素の値を返せるのは、応答の形を型が保証しているから。
