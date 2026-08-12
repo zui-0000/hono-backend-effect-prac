@@ -4,9 +4,9 @@ import { MailAddress } from "~/shared/domain/model/value-objects/mail-address";
 import { Password } from "~/shared/domain/model/value-objects/password";
 import { PasswordHasher } from "~/shared/domain/password-hasher";
 
-import { VerifyCredentialsQueryService } from "../application/verify-credentials-query-service";
 import { verifyCredentials } from "../domain/services/verify-credentials";
 import { UserRepository } from "../domain/user-repository";
+import { VerifyCredentialsQueryService } from "../public/verify-credentials-query-service";
 
 /**
  * VerifyCredentialsQueryService の実装 (アダプタ)。

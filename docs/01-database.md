@@ -103,7 +103,7 @@ src/contexts/<context>/infrastructure/
 
 > かつてここには「境界を跨ぐ FK も、相手コンテキストの `drizzle-schema.ts` を
 > import すれば書ける（その依存が可視化されるのが利点）」と書いていた。
-> **これは `no-cross-context-internals` と両立しない** — あのルールは他コンテキストの
+> **これは `cross-context-public-only` と両立しない** — あのルールは他コンテキストの
 > `infrastructure/` への import をまさに禁じている。`auth` が初のコンテキスト跨ぎで、
 > 実際に書こうとするまで矛盾に気付かなかった。2026-08-08 に撤回。
 

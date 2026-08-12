@@ -197,8 +197,8 @@ t_refresh_token                                  実装: contexts/auth/infrastru
 **auth 側の手順**（user が消えたら券も片付ける）で保つ。将来 DB を分けても壊れない。
 
 > `01-database.md` にはかつて「境界を跨ぐ FK も、相手コンテキストの `drizzle-schema.ts` を
-> import すれば書ける」と書いていたが、それは `no-cross-context-internals`
-> （他コンテキストの `infrastructure/` を禁じる）と**そもそも両立しない**。
+> import すれば書ける」と書いていたが、それは `cross-context-public-only`
+> （他コンテキストの非公開部分を禁じる）と**そもそも両立しない**。
 > auth が初のコンテキスト跨ぎだったため、今日まで露見しなかった。記述は撤回した。
 
 ### テーブル名に所有コンテキストを含めない
@@ -257,9 +257,7 @@ auth の内側には置けない。リフレッシュトークンのほうは au
 **`id` も `hashedPassword` も含まない**（`GET /users/{id}` のための射影として
 意図的にそぎ落としてある）。
 
-`UserRepository.findByMailAddress` は必要な情報を返すし、境界ルール上も
-参照できてしまう（`no-cross-context-internals` が禁じるのは相手の
-`infrastructure` / `presentation` だけ）。**しかし使うべきではない。**
+`UserRepository.findByMailAddress` は必要な情報を返す。**しかし使うべきではない。**
 あれは書き込み側のポートで、`create` / `updateProfile` / `deleteById` まで
 一緒に握ることになり、「書き込みは所有コンテキストの command を通す」が崩れる。
 
@@ -316,13 +314,21 @@ execute: (params: { mailAddress: string; password: string }) =>
 直接叩くと上記のとおりルールが 2 か所になる。
 **射影を返すという性質より、ルールを 1 つに保つほうを採った。**
 
-### ルールは止めてくれない
+### ルールが止めるようにした（2026-08-12）
 
-`no-cross-context-internals` が禁じるのは相手の `infrastructure` / `presentation` だけ。
-`UserRepository` は `domain/` にあるので、**auth から import しても lint は通る**。
-ここを守っているのは規約と人間の判断だけで、機械ではない
-（[`../03-boundary-enforcement.md`](../03-boundary-enforcement.md#落とし穴) の
-「ルールが守るのはファイルの分け方が正しいという前提の上」と同じ構図）。
+かつてここには「**ルールは止めてくれない**」と書いてあった。当時の
+`no-cross-context-internals` が禁じるのは相手の `infrastructure` / `presentation` だけで、
+`UserRepository` は `domain/` にあるため **auth から import しても lint が通った**。
+守っているのは規約と人間の判断だけ、という状態だった。
+
+`cross-context-public-only` へ改め、**allowlist に反転**した。他コンテキストから
+見えるのは `<ctx>/public/` と `<ctx>/domain/model/value-objects/` の 2 つだけで、
+`UserRepository` も `User` 集約も `application/` も届かない。
+`VerifyCredentialsQueryService` が `public/` に居るのはこのため。
+
+値オブジェクトを通すのは、**振る舞いもライフサイクルも持たない**から。
+渡しても書き込み権限が付いてこないし、業務ルールが変わっても形が変わらない。
+`RefreshToken` が `userId: UserId` を持つのがこの経路（集約は ID で参照する）。
 
 ---
 

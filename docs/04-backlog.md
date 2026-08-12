@@ -574,7 +574,8 @@ Query Service 側と重なっているのは `Option.fromNullable(rows[0])` の 
 
 #### 跨ぐ場合、repository を直接触るのは違う
 
-`no-cross-context-internals` が止めるからでもあるが、**止められなくても避ける**。
+`cross-context-public-only` が止める（`domain/` にあっても届かない）。
+**仮に止められなくても避ける**。
 `UserRepository` を auth が握れば `create` も `deleteById` も握ることになり、
 user 側の不変条件を auth が破れるようになる。検討順はこう:
 

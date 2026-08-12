@@ -19,6 +19,7 @@ src/
 │  └─ <context>/        #   例: user / auth
 │     ├─ <ctx>-layer.ts   #   提供側: このコンテキストの実装（infrastructure を知る）
 │     ├─ <ctx>-runtime.ts #   要求側: 動かすのに必要なサービス（ポートだけを知る）
+│     ├─ public/        #     他コンテキストへ公開するポート。ここだけが外から見える
 │     ├─ domain/        #     model/（集約 + value-objects/）, services/（ドメインサービス）, ポート
 │     ├─ application/   #     command / query（CQRS）
 │     ├─ infrastructure/#     テーブル定義 / リポジトリ実装（domain ↔ DB 変換, Layer）
@@ -43,9 +44,9 @@ docs/                   # 設計と学びの記録
 - **依存の向きは常に内向き。** 「どの実装を使うか」を知るのは `src/app-runtime.ts`（合成ルート）だけ。
   controller は `createApp(runtime)` 経由でランタイムを受け取るため、テストでは Layer を
   差し替えて DB なしで HTTP 境界ごと検証できる。
-- **コンテキストを跨ぐ参照はポート（`domain/`・`application/` の interface）に限る。**
-  他コンテキストの `infrastructure/` は直接 import しない。書き込みは必ず所有コンテキストの
-  command を通す。
+- **コンテキストを跨いで見えるのは `public/` と値オブジェクトだけ。** 公開面は
+  `<ctx>/public/` に置き、それ以外（集約・リポジトリ・`application/`・`infrastructure/`）は
+  他コンテキストから届かない。書き込みは必ず所有コンテキストの command を通す。
 - **バレル（再エクスポート専用の `index.ts`）は置かない**（`src` 配下に 0 個）。
   代わりにエクスポート名を単体で読める形にする（`UserId` / `createUser` / `UserRepositoryLive`）。
 - **上記はすべて lint で強制している。** 破ると `pnpm lint:fix` が落ちる

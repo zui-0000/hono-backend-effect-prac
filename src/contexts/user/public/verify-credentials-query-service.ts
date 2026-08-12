@@ -13,13 +13,14 @@ import type { UserId } from "../domain/model/value-objects/user-id";
  *
  * ### なぜ UserRepository を使わせないか
  *
- * `UserRepository.findByMailAddress` は必要な情報を返すし、境界ルール上も
- * 参照できてしまう (`no-cross-context-internals` が禁じるのは相手の
- * infrastructure / presentation だけ)。**それでも使わせない。**
- * あれは書き込み側のポートで、渡すと `create` / `updateProfile` / `deleteById` まで
- * 一緒に握らせることになり、「書き込みは所有コンテキストの command を通す」が崩れる。
+ * `UserRepository.findByMailAddress` は必要な情報を返すが、あれは書き込み側のポートで、
+ * 渡すと `create` / `updateProfile` / `deleteById` まで一緒に握らせることになり、
+ * 「書き込みは所有コンテキストの command を通す」が崩れる。
  *
- * **ルールが止めてくれない越境なので、人間が止める。**
+ * かつてはこの越境を境界ルールが止められず、doc で「人間が止める」と宣言していた。
+ * 2026-08-12 に `cross-context-public-only` を allowlist へ反転させ、
+ * **他コンテキストから見えるのは `public/` と値オブジェクトだけ**にしたので、
+ * いまは機械が止める。このファイルが `public/` に居るのはそのため。
  *
  * ### なぜハッシュを返さないか
  *

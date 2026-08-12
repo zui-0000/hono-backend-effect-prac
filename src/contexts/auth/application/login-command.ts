@@ -1,6 +1,6 @@
 import { Effect, Option, Schema } from "effect";
 
-import { VerifyCredentialsQueryService } from "~/contexts/user/application/verify-credentials-query-service";
+import { VerifyCredentialsQueryService } from "~/contexts/user/public/verify-credentials-query-service";
 import { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
 import type { RepositoryError } from "~/shared/errors/repository-error";

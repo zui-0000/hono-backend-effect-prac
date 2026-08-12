@@ -86,19 +86,53 @@ override に当たるファイルはトップレベルの宣言が効かない�
 
 ## コンテキスト跨ぎ — dependency-cruiser にしか書けないルール
 
-「`contexts/X` は `contexts/Y`（X≠Y）の内部層を import しない」には**後方参照**が要る。
+「`contexts/X` は `contexts/Y`（X≠Y）の非公開部分を import しない」には**後方参照**が要る。
 `no-restricted-imports` の glob にはその機能がないため、oxlint では表現できない。
 
 ```js
 from: { path: "^src/contexts/([^/]+)/" },
 to: {
-  path: "^src/contexts/([^/]+)/(infrastructure|presentation)/",
-  pathNot: "^src/contexts/$1/",   // ← $1 が from の捕捉。自分自身だけ除外する
+  path: "^src/contexts/[^/]+/",
+  pathNot: [
+    "^src/contexts/$1/",                                // ← $1 が from の捕捉。自分自身
+    "^src/contexts/[^/]+/public/",                      // 公開面
+    "^src/contexts/[^/]+/domain/model/value-objects/",  // 公表された言語
+  ],
 },
 ```
 
 これで**コンテキストが何個増えても宣言は 1 つのまま**（組み合わせ n² を書かずに済む）。
-ポート（`domain/`・`application/` の interface）への参照は通り、内部層だけが弾かれる。
+
+### なぜ allowlist なのか（2026-08-12 に反転）
+
+かつては blocklist だった。禁じるのは相手の `infrastructure` / `presentation` だけで、
+`domain/` と `application/` は素通り。**`UserRepository` も `User` 集約も届いた。**
+当時は各所の doc に「ルールが止めてくれない越境なので、人間が止める」と書いていた。
+
+反転した理由は 2 つ。
+
+1. **止めたいものが `domain/` にあった。** blocklist の穴が、いちばん渡したくない
+   書き込みポートをそのまま通していた。層の名前で切っている限り塞げない。
+2. **公開面が増えても宣言が増えない。** ポートが 5 本になったとき、blocklist だと
+   「どれが越境用でどれが内部用か」がディレクトリから読めない。`public/` に置けば、
+   **公開面の増減がそのまま差分に出る**。
+
+Go の `internal/` と同じ発想で、あちらはコンパイラが強制する。
+TypeScript には言語機能がないので、ディレクトリ + dependency-cruiser で代替している。
+
+**値オブジェクトだけ `public/` の外で許している**のは、振る舞いもライフサイクルも
+持たないから。渡しても書き込み権限が付いてこず、業務ルールが変わっても形が変わらない
+（集約は ID で参照する / Published Language）。`RefreshToken` が `userId: UserId` を
+持つのがこの経路。
+
+| 越えるもの                         | 可否 | 理由                                        |
+| ---------------------------------- | :--: | ------------------------------------------- |
+| `public/` のポート                 |  ✓   | 供給側が形を制御している                    |
+| `domain/model/value-objects/`      |  ✓   | 変わる理由がない。権限も付いてこない        |
+| `domain/` の集約                   |  ✗   | 相手の業務ルールが変わると壊れる            |
+| `domain/` のリポジトリ             |  ✗   | `create` / `deleteById` まで握ることになる  |
+| `application/`                     |  ✗   | 内部の手順。公開したいなら `public/` へ置く |
+| `infrastructure/`・`presentation/` |  ✗   | 実装の詳細                                  |
 
 ---
 
@@ -131,7 +165,7 @@ const message = ({ violation, reason, fix }) =>
 実際、当初 `domain` に 2 つの `override` を当てていたため、後者が前者を上書きし、
 **`domain` からの DB / 生成コード参照が素通りしていた**。
 
-### 同一コンテキスト内は `no-cross-context-internals` の対象外
+### 同一コンテキスト内は `cross-context-public-only` の対象外
 
 `pathNot: "^src/contexts/$1/"` で自分自身を除外しているため、
 `contexts/user/presentation` → `contexts/user/infrastructure` は引っかからない。

@@ -1,6 +1,6 @@
 import type { ManagedRuntime } from "effect";
 
-import type { VerifyCredentialsQueryService } from "~/contexts/user/application/verify-credentials-query-service";
+import type { VerifyCredentialsQueryService } from "~/contexts/user/public/verify-credentials-query-service";
 import type { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
 

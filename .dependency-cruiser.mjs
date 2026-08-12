@@ -16,9 +16,6 @@
  * package.json の check:deps で --output-type err-long を指定している。
  */
 
-/** コンテキスト内部の層 (他コンテキストから触られてはいけない)。 */
-const INTERNAL_LAYERS = "(infrastructure|presentation)";
-
 /**
  * 実装 (アダプタ) の置き場。contexts と shared を同じ扱いにする。
  *
@@ -226,24 +223,37 @@ export default {
 
     // ---- コンテキストの境界 (oxlint では表現できない後方参照) ----
     {
-      name: "no-cross-context-internals",
+      name: "cross-context-public-only",
       severity: "error",
       comment: message({
-        violation:
-          "他コンテキストの infrastructure / presentation を直接参照しています。",
+        violation: "他コンテキストの非公開な部分を直接参照しています。",
         reason:
-          "それらは境界の内側にある実装で、外から使われる前提がありません。\n" +
-          "直接触ると相手の内部変更で壊れ、境界を分けた意味が無くなります。\n" +
-          "(テーブル定義を直接掴むと、相手の command を通さない書き込みも可能になります)",
+          "コンテキストの外から使われる前提があるのは、公開面 (public/) と\n" +
+          "値オブジェクト (domain/model/value-objects/) だけです。\n" +
+          "それ以外は相手の内部で、参照すると 2 つの壊れ方をします。\n" +
+          "  リポジトリ → create / deleteById まで一緒に握ることになり、\n" +
+          "               相手の command を通さない書き込みができてしまう\n" +
+          "  集約       → 相手の業務ルールが変わるたびにこちらが壊れる\n" +
+          "               (集約は書き込みモデルで、変わる理由が自分の側にない)",
         fix:
-          "相手コンテキストが公開しているポート (domain/・application/ の interface) を参照します。\n" +
+          "相手コンテキストの public/ にあるポートを参照します。\n" +
           "必要なポートが無ければ相手側に用意してもらいます\n" +
-          "(DDD の Customer/Supplier: 使う側の要求を供給側が受けて公開する)。",
+          "(DDD の Customer/Supplier: 使う側の要求を供給側が受けて公開する)。\n" +
+          "識別子だけが要るなら値オブジェクトを参照します (集約は ID で参照する)。",
       }),
       from: { path: "^src/contexts/([^/]+)/" },
       to: {
-        path: `^src/contexts/([^/]+)/${INTERNAL_LAYERS}/`,
-        pathNot: "^src/contexts/$1/",
+        path: "^src/contexts/[^/]+/",
+        pathNot: [
+          // 自分のコンテキストの中は自由。
+          "^src/contexts/$1/",
+          // 公開面。ここに置いたものだけが「外から使ってよい」と宣言されている。
+          "^src/contexts/[^/]+/public/",
+          // 公表された言語 (Published Language)。値オブジェクトは振る舞いも
+          // ライフサイクルも持たないので、渡しても書き込み権限が付いてこない。
+          // auth の RefreshToken が userId: UserId を持つのがこの経路。
+          "^src/contexts/[^/]+/domain/model/value-objects/",
+        ],
       },
     },
   ],

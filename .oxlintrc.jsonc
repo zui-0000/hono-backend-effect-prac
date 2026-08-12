@@ -113,7 +113,9 @@
     },
     {
       // application は手順だけを決める。実装は知らない。
-      "files": ["src/contexts/*/application/**"],
+      // public (他コンテキストへ公開するポート) も同じ制約。あちらは
+      // 「外から使ってよい面」という宣言であって、実装を知ってよいわけではない。
+      "files": ["src/contexts/*/application/**", "src/contexts/*/public/**"],
       "rules": {
         "no-restricted-imports": [
           "error",

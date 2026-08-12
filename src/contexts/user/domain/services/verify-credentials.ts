@@ -30,7 +30,7 @@ import { UserRepository } from "../user-repository";
  * この関数を auth が直接呼ぶことはない。呼ぶと auth の `R` に
  * `UserRepository | PasswordHasher` が乗り、user の内部——とくに書き込み側の
  * `create` / `deleteById`——まで握らせることになる。auth には
- * [`VerifyCredentialsQueryService`](../../application/verify-credentials-query-service.ts)
+ * [`VerifyCredentialsQueryService`](../../public/verify-credentials-query-service.ts)
  * というポートだけを見せ、その実装がこの関数を使う。
  */
 export const verifyCredentials = (
