@@ -23,6 +23,11 @@
     "pnpm",
     "mise",
     "Redoc",
+    "Modulith", // Spring Modulith (モジュラーモノリス支援)
+    // 人名・組織名 (docs の参考文献)
+    "Kamil",
+    "Grzybek",
+    "softarc",
   ],
   // 綴りチェック対象外 (生成物・移行 SQL・ロックファイル)
   "ignorePaths": [
