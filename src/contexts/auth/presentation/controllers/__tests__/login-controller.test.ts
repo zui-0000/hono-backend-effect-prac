@@ -15,7 +15,7 @@ import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
 import { RefreshToken } from "~/contexts/auth/domain/model/refresh-token";
 import { UserId } from "~/contexts/user/domain/model/value-objects/user-id";
-import { LoginBody } from "~/generated/auth";
+import type { LoginBody } from "~/generated/auth";
 import type { AccessTokenClaims } from "~/shared/domain/access-token-issuer";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { ErrorMessage } from "~/shared/presentation/constants/error-message";

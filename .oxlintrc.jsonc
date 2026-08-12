@@ -27,6 +27,18 @@
     // ファイル名は kebab-case (ハイフン繋ぎ) を強制。
     // OS 間の大小事故 (macOS/Windows は大小無視) と命名ブレを防ぐ。
     "unicorn/filename-case": ["error", { "case": "kebabCase" }],
+    // 型としてしか使わない import は `import type` で書く。
+    //
+    // fixStyle は既定の separate-type-imports のまま。inline も試したが、
+    // **verbatimModuleSyntax と組み合わせると実害がある**。宣言全体が型のとき、
+    // inline (`import { type Foo } from "m"`) は `import {} from "m"` を出力に残す
+    // = 型しか使っていないモジュールを実行時に読み込む。宣言ごと `import type` に
+    // すれば丸ごと消える (2026-08-12 に tsc --verbatimModuleSyntax で実測)。
+    //
+    // 結果として同じモジュールから 2 行出ることがあるが、それは冗長ではなく
+    // **出力が分かれることの反映**。値と型が混ざる宣言は 1 行のまま
+    // (`import { Context, type Effect } from "effect"`) で、こちらは inline になる。
+    "typescript/consistent-type-imports": "error",
     // 正規表現に u フラグを必須にする。
     // 不正なエスケープがエラーになり、\w や \d の意味がロケールで揺れなくなる。
     // 全カテゴリを測ったなかで**偽陽性がゼロだった唯一のルール** (6 件・全部実在)。

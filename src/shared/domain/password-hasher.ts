@@ -1,4 +1,5 @@
-import { Context, Effect } from "effect";
+import type { Effect } from "effect";
+import { Context } from "effect";
 
 /**
  * パスワードのハッシュ化・照合を行うサービス。

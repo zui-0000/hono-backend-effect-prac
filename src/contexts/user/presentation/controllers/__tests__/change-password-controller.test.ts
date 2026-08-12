@@ -13,9 +13,9 @@ import {
 } from "~/__mocks__/data";
 import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
-import { User } from "~/contexts/user/domain/model/user";
+import type { User } from "~/contexts/user/domain/model/user";
 import type { UserHashedPassword } from "~/contexts/user/domain/model/value-objects/user-hashed-password";
-import { ChangePasswordBody } from "~/generated/users";
+import type { ChangePasswordBody } from "~/generated/users";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { ErrorMessage } from "~/shared/presentation/constants/error-message";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";

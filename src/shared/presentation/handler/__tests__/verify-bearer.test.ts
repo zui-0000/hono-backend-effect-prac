@@ -7,7 +7,7 @@ import { makeRuntime } from "~/__mocks__/app-runtime";
 import { FIXED_UUID, REQUEST_ID, headers } from "~/__mocks__/data";
 import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
-import {
+import type {
   ChangePasswordBody,
   CreateUserBody,
   UpdateUserBody,

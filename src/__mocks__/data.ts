@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { User } from "~/contexts/user/domain/model/user";
+import type { User } from "~/contexts/user/domain/model/user";
 import { UserHashedPassword } from "~/contexts/user/domain/model/value-objects/user-hashed-password";
 import { UserId } from "~/contexts/user/domain/model/value-objects/user-id";
 import { UserName } from "~/contexts/user/domain/model/value-objects/user-name";

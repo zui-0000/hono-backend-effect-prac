@@ -18,7 +18,7 @@ import {
   RevokedReason,
 } from "~/contexts/auth/domain/model/refresh-token";
 import type { RefreshTokenHash } from "~/contexts/auth/domain/model/value-objects/refresh-token-hash";
-import { RefreshBody } from "~/generated/auth";
+import type { RefreshBody } from "~/generated/auth";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { ErrorMessage } from "~/shared/presentation/constants/error-message";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";

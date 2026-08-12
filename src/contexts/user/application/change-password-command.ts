@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 import { orNotFound } from "~/shared/application/or-not-found";
 import { Password } from "~/shared/domain/model/value-objects/password";
 import { PasswordHasher } from "~/shared/domain/password-hasher";
-import { ForbiddenError } from "~/shared/errors/forbidden-error";
+import type { ForbiddenError } from "~/shared/errors/forbidden-error";
 import type { RepositoryError } from "~/shared/errors/repository-error";
 import type { ResourceNotFoundError } from "~/shared/errors/resource-not-found-error";
 import type { UnauthorizedError } from "~/shared/errors/unauthorized-error";
