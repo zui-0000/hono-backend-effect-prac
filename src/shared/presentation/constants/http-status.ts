@@ -6,8 +6,8 @@
  * 対応が読める (例: `HttpStatus.Conflict` ↔ `ErrorCode.MailAddressDuplication` = "4091")。
  *
  * `as const` を付けているのはリテラル型を保つため。`HttpStatus.NoContent` が
- * `number` に広がると、本文なし応答を表す判別可能ユニオン
- * (`handle-with-effect.ts` の NoContentResponse) が機能しなくなる。
+ * `number` に広がると、本文の有無で分かれる判別可能ユニオン
+ * (`success-response.ts` の `SuccessResponse`) が機能しなくなる。
  *
  * 契約 (TypeSpec) に無いステータスはここにも書かない。増やすときは
  * まず `schema/` の契約に足す。
@@ -23,8 +23,9 @@ export const HttpStatus = {
   BadRequest: 400,
   /** 401 認証情報が不正 */
   Unauthorized: 401,
-  /** 404 リソースが存在しない */
+  /** 403 操作する権限が無い */
   Forbidden: 403,
+  /** 404 リソースが存在しない */
   NotFound: 404,
   /** 409 リソースの現在の状態と衝突する */
   Conflict: 409,

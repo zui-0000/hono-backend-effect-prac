@@ -79,8 +79,10 @@ const handle =
           c,
         } as ControllerInput<Req, Auth>);
 
-        return responded._tag === "NoContent"
-          ? c.body(null, HttpStatus.NoContent)
+        // 204 は本文を持てないので c.json を通さない。通すと本文が空でも
+        // Content-Type: application/json が載り、中身があると名乗る応答になる。
+        return responded.status === HttpStatus.NoContent
+          ? c.body(null, responded.status)
           : c.json(responded.body as object, responded.status);
       }).pipe(handleFailures(c, c.get("requestId"))),
     );

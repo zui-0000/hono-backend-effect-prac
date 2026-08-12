@@ -47,8 +47,13 @@ export type ErrorBody = {
   readonly details?: readonly ErrorDetail[];
 };
 
-/** HTTP 応答 (ステータスコードとボディ) 。 */
-export type HttpErrorResponse = {
+/**
+ * エラー時の HTTP 応答 (ステータスコードとボディ)。
+ *
+ * 成功側の [`SuccessResponse`](../success-response.ts) と対。`presentation/` の中は
+ * すべて HTTP なので `Http` は冠さない (翻訳元は `ApplicationError` が名乗っている)。
+ */
+export type ErrorResponse = {
   readonly status: ContentfulStatusCode;
   readonly body: ErrorBody;
 };
@@ -74,7 +79,7 @@ const errorBody = (params: {
  * 外に見せる形は 500 と同じでなければならない (契約の InternalServerError)。
  * 応答ボディの組み立てを 1 箇所に保つため、翻訳表と同じこのファイルに置く。
  */
-export const defectResponse: HttpErrorResponse = {
+export const defectResponse: ErrorResponse = {
   status: HttpStatus.InternalServerError,
   body: errorBody({
     errorCode: ErrorCode.InternalServerError,
@@ -92,9 +97,7 @@ export const defectResponse: HttpErrorResponse = {
  * case はステータスコードの昇順に並べ、同じステータス内では
  * 汎用エラー (errorCode の下 1 桁が 0) を先に置く。
  */
-export const handleErrorResponse = (
-  error: ApplicationError,
-): HttpErrorResponse => {
+export const handleErrorResponse = (error: ApplicationError): ErrorResponse => {
   switch (error._tag) {
     // ---- 400 Bad Request (汎用) ----
     // リクエストが不正 (検証違反・JSON として読めない等)。

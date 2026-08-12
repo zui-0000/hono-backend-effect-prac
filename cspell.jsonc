@@ -13,6 +13,7 @@
     // ツール/ライブラリ名
     "Bun",
     "hono",
+    "contentless", // Hono の ContentlessStatusCode 由来 (本文を持てないステータス)
     "drizzle",
     "orval",
     "oxlint",
