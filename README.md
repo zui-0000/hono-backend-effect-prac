@@ -63,11 +63,13 @@ pnpm start
   （oxlint と dependency-cruiser の役割分担、層ごとの可否表、踏んだ落とし穴）
 - [`docs/04-backlog.md`](docs/04-backlog.md) — 積み残し
   （固定すべき挙動、未実装のユースケース、先送りした判断とその理由）
-- [`docs/05-auth/`](docs/05-auth/) — 認証（ここだけディレクトリを切っている）
+- [`docs/認証/`](docs/認証/) — **認証の全体像**（まずここ）。
+  券が 2 枚ある理由、Bearer 一本をやめた理由、シーケンス図、決めた値、環境変数
+- [`docs/05-auth/`](docs/05-auth/) — 認証の**深掘り**（判断の経緯）
   - [`00-authentication-methods.md`](docs/05-auth/00-authentication-methods.md) — **方式そのものの解説**。
     セッションと JWT、券の運び方、二段構えの理由、踏みやすい落とし穴。
     このリポジトリの決定ではなく一般的な知識なので、他の doc とは性質が違う
   - [`01-our-approach.md`](docs/05-auth/01-our-approach.md) — **このリポジトリの決定**。
-    契約が既に決めていること、そこから導かれる設計、まだ決めていないことと決める引き金
+    契約が既に決めていること、そこから導かれる設計、見送った案、実際に踏んだ穴
 - [`docs/06-setup.md`](docs/06-setup.md) — 環境構築
   （事前インストール、手順、TypeSpec → OpenAPI → Effect Schema の生成）
