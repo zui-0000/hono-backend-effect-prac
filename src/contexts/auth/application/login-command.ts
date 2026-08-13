@@ -1,10 +1,11 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 import { VerifyCredentialsQueryService } from "~/contexts/user/public/verify-credentials-query-service";
+import { orUnauthorized } from "~/shared/application/or-unauthorized";
 import { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
 import type { RepositoryError } from "~/shared/errors/repository-error";
-import { UnauthorizedError } from "~/shared/errors/unauthorized-error";
+import type { UnauthorizedError } from "~/shared/errors/unauthorized-error";
 
 import { issueRefreshToken } from "../domain/model/refresh-token";
 import { RefreshTokenHash } from "../domain/model/value-objects/refresh-token-hash";
@@ -63,12 +64,9 @@ export const loginCommand = (
     const refreshTokenIssuer = yield* RefreshTokenIssuer;
     const accessTokenIssuer = yield* AccessTokenIssuer;
 
-    // 1. 照合。「居ない」と「合わない」は user 側で既に畳まれている。
-    const verified = yield* verifyCredentials.execute(input);
-    if (Option.isNone(verified)) {
-      return yield* new UnauthorizedError();
-    }
-    const userId = verified.value;
+    // 1. 照合。「居ない」と「合わない」は user 側で既に畳まれているので、
+    //    畳まれたまま 401 へ翻訳する。
+    const userId = yield* verifyCredentials.execute(input).pipe(orUnauthorized);
 
     // 2. ログインごとに新しいセッション。1 セッション = 1 デバイスの単位になる。
     const sessionId = yield* generateSessionId;

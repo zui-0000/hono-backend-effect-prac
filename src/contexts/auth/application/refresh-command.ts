@@ -1,5 +1,6 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
+import { orUnauthorized } from "~/shared/application/or-unauthorized";
 import { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import { now } from "~/shared/domain/clock";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
@@ -69,11 +70,9 @@ export const refreshCommand = (
       .pipe(Effect.flatMap(Schema.decode(RefreshTokenHash)))
       .pipe(Effect.orDie);
 
-    const stored = yield* refreshTokenRepository.findByTokenHash(presentedHash);
-    if (Option.isNone(stored)) {
-      return yield* new UnauthorizedError();
-    }
-    const current = stored.value;
+    const current = yield* refreshTokenRepository
+      .findByTokenHash(presentedHash)
+      .pipe(orUnauthorized);
 
     // 2. 状態を判定する。
     const state = yield* classifyRefreshToken(current);
