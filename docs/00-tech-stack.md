@@ -214,3 +214,202 @@ error TS377001: This Effect value is neither yielded nor used in an assignment. 
 副産物として、`respondedAt` を廃したときに `errorBody` から時刻取得が消え、
 連鎖して `handleErrorResponse` が `Effect` を返す必要すらなくなった
 （[`02-architecture.md`](02-architecture.md#api-応答を封筒envelopeで包まない)）。
+
+---
+
+## Effect から降りるとしたらどこへ（2026-08-14 測定）
+
+Effect は**このリポジトリでは正解だが、仕事で人が回るチームでも正解とは限らない**。
+「初見の人間には重いのでは」という疑いは正当なので、降り先を実際に測って整理しておく。
+判断そのものは変えていない（Effect のまま）。ここに残すのは**引き金**と**写像**。
+
+### まず前提 — 構造は Effect の資産ではない
+
+`contexts/` の縦切り、`public/` の allowlist、CQRS の非対称、`query-not-to-write-model`、
+`docs/` の判断記録。**どれも Effect に依存していない。**
+[`.dependency-cruiser.mjs`](../.dependency-cruiser.mjs) は 1 行も変えずに
+別ライブラリのコードを守る。乗り換えで書き換わるのは配線だけ。
+
+だからこの章は「積み上げが無駄になるか」の話ではなく、**配線をどれに替えるか**の話。
+
+### 監査 — 今このリポジトリで Effect は何を稼いでいるか
+
+| 機能                          | 現状                                              | 他で代替できるか       |
+| ----------------------------- | ------------------------------------------------- | ---------------------- |
+| `E`（型付き失敗）             | フル活用。doc 規約が `@throws` を捨てた根拠       | できる                 |
+| `Schema`（双方向 + branded）  | 値オブジェクト全部                                | ほぼできる（zod）      |
+| **`R`（型付き DI）**          | `UserRuntime` / `Layer` / 合成ルート / 境界ルール | **これだけができない** |
+| `orDie`（defect と failure）  | `verify-credentials-query-service-live.ts` の要   | 部分的（throw に戻る） |
+| 構造化並行性 / `Scope` / 中断 | **ほぼ使っていない**                              | —                      |
+| リトライ / Schedule / 計装    | **使っていない**                                  | —                      |
+
+**独占的に稼いでいるのは `R` チャネル 1 本。** 並行性まわりは 1 円も回収していない。
+そしてその `R` も、部分適用で依存を先に食わせる手書き DI で代替できる
+（`createGetUserQuery(deps)` の形）。TypeScript はもともと引数で足りる言語で、
+`Context.Tag` のファイルが要らなくなるぶん境界ルールはむしろ書きやすくなる。
+
+### 候補の実測
+
+週間ダウンロードと GitHub の保守シグナル。**測定日 2026-08-14。**
+
+|                   |      weekly DL | 最新    |  stars | open issues | 最終 push      |
+| ----------------- | -------------: | ------- | -----: | ----------: | -------------- |
+| zod               |    254,388,559 | 4.4.3   |      — |           — | —              |
+| hono              |     56,851,709 | 4.13.2  |      — |           — | —              |
+| **effect**        | **26,680,112** | 3.22.1  | 15,265 |         227 | **2026-08-13** |
+| ts-pattern        |      7,379,819 | 5.9.0   |      — |           — | —              |
+| **better-result** |  **5,248,654** | 3.0.1   |  1,880 |           2 | 2026-08-11     |
+| fp-ts             |      4,357,926 | 2.16.11 |      — |           — | —              |
+| **neverthrow**    |  **2,551,436** | 8.2.0   |  7,671 |          82 | **2026-02-14** |
+
+月間の推移（1 年）。
+
+```text
+effect         2025-08   10,249,693  →  2026-07  102,278,661   (10 倍)
+neverthrow     2025-08    2,742,084  →  2026-07    9,388,920   (3.4 倍)
+better-result  2026-01       34,335  →  2026-07   19,874,394   (初版が 2026-01-09)
+```
+
+読み取れること。
+
+- **Effect は 1 年で 10 倍。** fp-ts（4.4M）の 6 倍あり、TS の関数型スロットは決着済み。
+  「尖った実験」ではなくなっている。
+- **普及度で neverthrow を選ぶ理屈は立たない。** Effect の 1/10 で、
+  しかも **6 か月コミットが無い**（open issues 82）。Result 型は機能追加が要らないので
+  「完成して落ち着いている」とも読めるが、少なくとも「動いているから安心」ではない。
+- ダウンロード数は「何チームが選んだか」ではなく「何回 `node_modules` に落ちたか」。
+  CI と推移的依存が混ざるため、**採用判断の根拠としては弱い**。
+
+### better-result — Effect から `R` だけを抜いたもの
+
+7 か月で 2000 万 DL/月まで伸びた新顔（0 依存 / MIT / ESM / 約 269KB）。
+書き味が**そのまま Effect**なのが特徴。
+
+```ts
+const checkout = (cartId: string) =>
+  Result.gen(function* () {
+    const cart = yield* findCart(cartId);
+    const reservation = yield* reserveStock(cart.items);
+    return Result.ok(receipt);
+  });
+
+class InvalidPort extends TaggedError("InvalidPort")<{ input: string }> {}
+```
+
+`Result.gen` = `Effect.gen`、`TaggedError` = `Data.TaggedError`、非同期は `Result.await`。
+そして **DI / Context は無い**（README に記載なし）。上の監査表でいう
+「独占的に稼いでいる `R` 1 本」だけが落ちる構成で、移行差分は neverthrow より桁違いに小さい。
+
+**ただし仕事で使う前提なら勧めない。**
+
+- **7 か月で 3 メジャー**（`1.0.0` → `2.0.0` は 6 日）。API が固まっていない
+- **バス係数 1。** コントリビュータ 14 人だが 76 commit vs 他は最大 3
+- 歴史が 7 か月しかなく、社内で説明する材料が少ない
+
+> **裏が取れなかったこと。** 0 → 2000 万 DL/月を 7 か月という曲線が
+> 人力採用によるものか、推移的依存によるものかは**特定できていない**。
+> npm の `depends:` 検索は全文検索に落ちて 17 万件返すため使えなかった。
+> ここを断定材料に使わないこと。
+
+### スキーマはどうなるか
+
+better-result に**自前のスキーマは無い**。代わりに
+[Standard Schema](https://standardschema.dev/) の interface を同梱していて、
+zod / valibot / arktype / Effect Schema を**どれでも差せる**（型定義に
+`Source: https://standardschema.dev/schema#the-interface` の注記つきで入っている）。
+
+**これはマイナスではない。** Result 型ライブラリがバリデータまで抱えるのは責務過剰で、
+zod と正面からぶつかって勝てるものでもない。npm の作法でいう「自分で抱えず外に任せる」側。
+Standard Schema という共通規格が成立して初めて取れる選択で、fp-ts の時代には無かった手。
+
+ただし**スキーマを受ける口は狭い**。`Result` が公開しているスキーマ関連の API は
+`Result.codec({ serialize: { ok, err }, deserialize: { ok, err } })` **だけ**で、
+これは Result を境界の向こうへ送る / 受けるためのコーデック。
+「入力を検証して Result にする」汎用コンビネータは無い（メソッド一覧で確認済み）。
+
+このリポジトリで Effect Schema が担っている 4 つは、そのまま移行時の作業項目になる。
+
+| 用途           | 現状                                                         | 移行後                                          |
+| -------------- | ------------------------------------------------------------ | ----------------------------------------------- |
+| 値オブジェクト | `Schema.brand`（`UserId` / `MailAddress` / `Password` ほか） | zod の `.brand()`                               |
+| 集約           | `Schema.Struct`                                              | zod のオブジェクトスキーマ                      |
+| 境界の検証     | `decodeInput` / `Schema.decodeUnknown`                       | **自分で書く**（`safeParse` → `Result`、10 行） |
+| 契約の生成     | orval `client: "effect"` + `useBrandedTypes`                 | orval `client: "zod"`                           |
+
+移行の逃げ道が 2 つあることは実物で確認した。
+
+- **orval は zod 生成器を同梱している。** `@orval/zod` を型定義が import している
+  （orval 8.24.0）。生成器の差し替えで済む。
+  ただし **`useBrandedTypes` に相当するオプションが zod 側にあるかは未確認**。
+  移行するなら最初に潰す点。
+- **Effect Schema 自身が Standard Schema を出せる。**
+  `Schema.standardSchemaV1()`（effect 3.22.1 の `Schema.d.ts:124` に実在）。
+  段階移行の途中で両方を同じ口として扱える。
+
+### 混ぜてはいけない 2 つの心配ごと
+
+「Effect は重い」には**別々の問題が 2 つ**入っている。分けないと選べない。
+
+| 心配ごと                 | 犯人                                    | better-result | neverthrow |
+| ------------------------ | --------------------------------------- | ------------- | ---------- |
+| **初見の人間が読めない** | `function*` / `yield*` の do 記法       | 残る          | **消える** |
+| **概念の総量が多すぎる** | `Layer` / `Context` / `Scope` / Runtime | **消える**    | 消える     |
+
+読みやすさが問題なら答えは neverthrow の `.andThen()` チェーン。
+学習範囲が問題なら better-result の方が書き味を保ったまま削れる。**逆を選ぶと解決しない。**
+
+### 結論と、判断が逆転する引き金
+
+| 基準                     | 1 位              | 2 位           | 3 位          |
+| ------------------------ | ----------------- | -------------- | ------------- |
+| 初見の読みやすさ         | neverthrow        | better-result  | effect        |
+| 概念の少なさ             | neverthrow        | better-result  | effect        |
+| 保守の勢い               | effect            | better-result  | neverthrow    |
+| 採用の説明しやすさ       | effect            | neverthrow     | better-result |
+| **今のコードからの距離** | **better-result** | effect（据置） | neverthrow    |
+
+**このリポジトリは Effect を続ける。** 学習が目的なので、習得コストは費用ではなく成果物。
+
+**作り直すなら zod + better-result + 手動 DI。**（2026-08-14 時点の落とし所）
+
+理由は「Effect が難しいから」ではなく、**このアプリが Effect の高い方の機能を
+使っていないから**。上の監査表がその根拠で、稼いでいるのは `R` 1 本、
+並行性まわりは 1 円も回収していない。その `R` は部分適用の手動 DI
+（`createGetUserQuery(deps)`）で足り、`Context.Tag` のファイルが消えるぶん
+境界ルールはむしろ書きやすくなる。
+
+当初は neverthrow を置いていたが、測って動かした。
+
+|                  | 決め手                                                                            |
+| ---------------- | --------------------------------------------------------------------------------- |
+| **保守の勢い**   | neverthrow は **6 か月コミットが無い**（open issues 82）。better-result は 3 日前 |
+| **移行距離**     | `Result.gen` / `TaggedError` がそのまま。書き換えるのは配線だけで済む             |
+| **書き味の連続** | 今のコードの読み方を捨てずに済む。学んだ do 記法が無駄にならない                  |
+
+**残しているリスクは実績だけ。** 7 か月・バス係数 1・3 メジャー。
+**ここは承知のうえで目をつぶっている**ので、他人のプロダクトに入れるときは
+判断し直すこと（この節の better-result の項に懸念をそのまま残してある）。
+「読みやすさ」が最優先の現場なら、ジェネレータの出ない neverthrow が今も正解。
+
+判断が逆転する引き金は 2 つ。
+
+1. **並行制御・リソース管理・リトライを本気で要求する**ようになったとき
+   （ワーカー、ストリーム処理、大量の外部 API を束ねる、部分失敗の扱い）。
+   監査表の下 2 行が埋まった瞬間、Effect の回収額が跳ね上がり評価は逆転する。
+2. **better-result がメジャーを 1 年打たずに複数メンテナ体制になったとき。**
+   いま欠けているのは設計ではなく実績だけなので、そこが埋まれば有力になる。
+
+### 測り直し方
+
+数字は古くなる。同じ形で取り直せるようにしておく。
+
+```bash
+# 週間ダウンロードと最新版
+for p in effect zod neverthrow better-result fp-ts; do
+  curl -s "https://api.npmjs.org/downloads/point/last-week/$p"
+  curl -s "https://registry.npmjs.org/$p/latest"
+done
+
+# 保守シグナル（stars / open issues / 最終 push）
+curl -s "https://api.github.com/repos/Effect-TS/effect"
+```
