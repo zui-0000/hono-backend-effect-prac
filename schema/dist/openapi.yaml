@@ -405,9 +405,9 @@ components:
       title: BadRequestError
       examples:
         - errorCode: '4000'
-          message: BadRequestError
+          message: リクエスト内容が不正です
           details:
-            - field: email
+            - field: mailAddress
               message: メールアドレスの形式が不正です
     ChangePasswordRequest:
       type: object
@@ -465,7 +465,7 @@ components:
       description: エラーメッセージ
       title: ErrorMessage
       examples:
-        - BadRequestError
+        - リクエスト内容が不正です
     ForbiddenError:
       type: object
       required:
@@ -480,7 +480,7 @@ components:
       title: ForbiddenError
       examples:
         - errorCode: '4030'
-          message: ForbiddenError
+          message: この操作を行う権限がありません
     GetUserResponse:
       type: object
       required:
@@ -506,7 +506,7 @@ components:
       title: InternalServerError
       examples:
         - errorCode: '5000'
-          message: InternalServerError
+          message: サーバーで予期せぬエラーが発生しました
     LoginRequest:
       type: object
       required:
@@ -551,7 +551,7 @@ components:
       title: MailAddressDuplicationError
       examples:
         - errorCode: '4091'
-          message: MailAddressDuplicationError
+          message: メールアドレスが既に使用されています
     Password:
       type: string
       minLength: 12
@@ -610,7 +610,7 @@ components:
       title: ResourceNotFoundError
       examples:
         - errorCode: '4040'
-          message: ResourceNotFoundError
+          message: 指定されたリソースは存在しません
     UnauthorizedError:
       type: object
       required:
@@ -625,7 +625,7 @@ components:
       title: UnauthorizedError
       examples:
         - errorCode: '4010'
-          message: UnauthorizedError
+          message: 認証情報が正しくありません
     UpdateUserRequest:
       type: object
       required:

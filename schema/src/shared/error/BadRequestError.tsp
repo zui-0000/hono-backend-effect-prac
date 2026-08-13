@@ -8,8 +8,10 @@ import "./ErrorMessage.tsp";
 @error
 @example(#{
   errorCode: "4000",
-  message: "BadRequestError",
-  details: #[#{ field: "email", message: "メールアドレスの形式が不正です" }],
+  message: "リクエスト内容が不正です",
+  details: #[
+    #{ field: "mailAddress", message: "メールアドレスの形式が不正です" }
+  ],
 })
 model BadRequestError {
   errorCode: ErrorCode;

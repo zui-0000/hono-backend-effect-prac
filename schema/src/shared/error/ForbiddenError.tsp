@@ -17,7 +17,7 @@ import "./ErrorMessage.tsp";
 @summary("ForbiddenError")
 @doc("操作する権限が無い (汎用)")
 @error
-@example(#{ errorCode: "4030", message: "ForbiddenError" })
+@example(#{ errorCode: "4030", message: "この操作を行う権限がありません" })
 model ForbiddenError {
   errorCode: ErrorCode;
   message: ErrorMessage;
