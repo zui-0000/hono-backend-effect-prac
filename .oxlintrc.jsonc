@@ -140,6 +140,54 @@
       },
     },
     {
+      // クエリ側は書き込みモデル (集約 / Repository) を知らない。
+      //
+      // 1 つ上の application / public の override に **当たり直す** ファイル群なので、
+      // あちらの group をすべて書き写したうえで 3 つ目を足している
+      // (後勝ちで丸ごと置き換わるため、書き写さないと実装参照が素通りする)。
+      "files": [
+        "src/contexts/*/application/*-query.ts",
+        "src/contexts/*/application/*-query-service.ts",
+        "src/contexts/*/public/*-query-service.ts",
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/infrastructure/**",
+                  "**/presentation/**",
+                  "~/shared/db/**",
+                  "**/shared/db/**",
+                ],
+                "message": "application は実装や DB を知りません。ポート (Context.Tag) 越しに使い、実装の結線は src/app-runtime.ts が行います。",
+              },
+              {
+                "group": ["~/generated/**", "**/generated/**"],
+                "message": "生成スキーマ (API 契約) を使ってよいのは presentation 層だけです。",
+              },
+              {
+                // value-objects/ は 1 階層下なので、`/` を跨がない `*` には当たらない。
+                "group": [
+                  "../domain/model/*",
+                  "../../domain/model/*",
+                  "~/contexts/*/domain/model/*",
+                  "**/contexts/*/domain/model/*",
+                  "../domain/*-repository",
+                  "../../domain/*-repository",
+                  "~/contexts/*/domain/*-repository",
+                  "**/contexts/*/domain/*-repository",
+                ],
+                "message": "クエリは集約を復元しません。必要な項目だけの射影を query-service に定義し、SELECT でその形を直接作ってください (GetUserQueryOutput が例)。値オブジェクトとドメインサービスは使えます。",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       // infrastructure は DB を触ってよいが、HTTP と API 契約は知らない。
       "files": ["src/contexts/*/infrastructure/**"],
       "rules": {

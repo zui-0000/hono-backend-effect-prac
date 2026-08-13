@@ -136,6 +136,77 @@ TypeScript には言語機能がないので、ディレクトリ + dependency-c
 
 ---
 
+## CQRS の非対称 — 読み取りは書き込みモデルを知らない
+
+ここまでのルールは**層**で切っている。それとは別の軸で 1 本だけ、
+**ファイル名**で切るルールがある（`query-not-to-write-model`）。
+
+```text
+Command: presentation → application → domain → infrastructure
+Query  : presentation → application → infrastructure   ← domain を経由しない
+```
+
+この非対称は [`02-architecture.md`](02-architecture.md) と
+`get-user-query-service.ts` の doc がずっと宣言していたが、**長らく機械では守っていなかった**。
+`get-user-query.ts` で集約を復元しても何も鳴らない状態だったということ。
+
+| 参照元                                                     | 集約（`domain/model/*.ts`） | Repository ポート | 値オブジェクト | ドメインサービス |
+| ---------------------------------------------------------- | :-------------------------: | :---------------: | :------------: | :--------------: |
+| `application/*-command.ts` など（コマンド側）              |              ✓              |         ✓         |       ✓        |        ✓         |
+| `application/*-query.ts`・`*-query-service.ts`（クエリ側） |              ✗              |         ✗         |       ✓        |        ✓         |
+| `public/*-query-service.ts`（公開クエリポート）            |              ✗              |         ✗         |       ✓        |        ✓         |
+
+- **集約を禁じる理由**は、読み取りに不変条件の強制が要らないから。必要な列だけを引いて
+  射影をそのまま返せるのが読み取り側の利点で、集約を掴むとそれを捨てたうえ
+  「集約の項目が変わると読み取り経路まで壊れる」形になる。
+- **Repository を禁じる理由**はもう 1 段強い。`create` / `deleteById` まで握るので、
+  **クエリと名乗るモジュールから書き込みができてしまう**。
+- **値オブジェクトを許す**のは、`GetUserQueryInput` が `UserId` を、
+  `VerifyCredentialsQueryService` が `Option<UserId>` を使っているから。
+  クエリ経路が domain を経由しないのは**集約を復元しない**という意味であって、
+  ドメインの語彙を使わないという意味ではない。
+- **ドメインサービスを許す**のは、`getUserQuery` が `checkUserIsSelf` を呼ぶから。
+  認可はユースケースの仕事で（[`02-architecture.md`](02-architecture.md) の認可の節）、
+  これも集約の復元にはあたらない。
+
+`public/` を対象に含めているのは副産物ではなく狙い。`cross-context-public-only` は
+**使う側**が集約を掴むのを止めるが、公開ポート自身が戻り値の型として集約を晒す形は
+止められない（他コンテキストは `public/` を見てよいため）。ここで塞いでいる。
+
+> 発想の出典は [Go の DDD/CQRS におけるインターフェース設計の記事](https://zenn.dev/watta_medii/articles/go-ddd-cqrs-interface)。
+> 「Query は DDD ではない」「repository に読み取りを混ぜるな」という主張が、
+> このリポジトリでは doc にあってルールに無かった部分を照らした。
+> なお同記事の「薄い Query なら interface を切らず直接 SQL を書く」は**採っていない**。
+> Effect の DI は `Context.Tag` が単位で、タグ無しには注入も差し替えもできず、
+> `application-not-to-impl` により application から SQL を書くこと自体ができない。
+
+### 直接 import だけを見ている（到達可能性では追わない）
+
+`no-indirect-path-to-impl` と違い、このルールに `reachable: true` は付けていない。
+ドメインサービスは集約に触れてよい（`verifyCredentials` が `verifyUserPassword` を呼ぶ）ため、
+到達可能性で追うと**許可したはずのドメインサービス経由がまとめて赤くなる**。
+
+裏を返せば、`domain/services/` に集約を返す関数を作ってクエリから呼べば、この網は抜けられる。
+そこは人間が止める領域として残っている。
+
+### 確認したこと（2026-08-13）
+
+規約どおり、わざと違反するファイルを作って両ツールで確かめた。
+
+| 作ったファイル                                 | 参照したもの                      | 期待 | 結果 |
+| ---------------------------------------------- | --------------------------------- | :--: | :--: |
+| `application/tmp-violation-query.ts`           | 集約 / `UserRepository`           | 鳴る |  ✓   |
+| `public/tmp-violation-public-query-service.ts` | 集約                              | 鳴る |  ✓   |
+| `application/tmp-allowed-query.ts`             | `UserId` / `checkUserIsSelf`      | 通る |  ✓   |
+| `application/tmp-impl-query.ts`                | `GetUserQueryServiceLive`（実装） | 鳴る |  ✓   |
+
+最後の 1 行が**このルール固有の確認**。oxlint 側は application の `override` に
+当たり直すファイル群を対象にしているため、[後勝ちで丸ごと置き換わる](#oxlint-の-overrides-は後勝ちで丸ごと置き換え)。
+既存の group を書き写し忘れていれば、**クエリファイルからの実装参照だけが素通りする**という
+静かな穴が空いていた。書き写しが効いていることをこれで確かめている。
+
+---
+
 ## 違反メッセージは 3 部構成
 
 規約を知らない人がその場で直せるよう、`comment` に

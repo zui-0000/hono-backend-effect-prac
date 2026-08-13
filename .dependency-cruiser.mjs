@@ -202,6 +202,42 @@ export default {
       to: { path: "^src/generated/" },
     },
 
+    // ---- CQRS の非対称 ----
+    {
+      name: "query-not-to-write-model",
+      severity: "error",
+      comment: message({
+        violation:
+          "クエリ側 (*-query.ts / *-query-service.ts) が書き込みモデル\n" +
+          "(集約 または Repository ポート) を参照しています。",
+        reason:
+          "読み取りは集約を復元しません。読み取りに不変条件の強制は要らないからで、\n" +
+          "そのぶん必要な列だけを引いて射影 (DTO) をそのまま返せます。\n" +
+          "集約を掴むと、その利点を捨てたうえ「読むために書き込みモデルが要る」形になり、\n" +
+          "集約の項目が変わるたびに読み取り経路まで壊れます。\n" +
+          "Repository を掴むのはさらに悪く、create / deleteById まで握るため\n" +
+          "クエリと名乗るモジュールから書き込みができてしまいます。",
+        fix:
+          "必要な項目だけを持つ射影の型を query-service 側に定義し、\n" +
+          "SELECT でその形を直接作ります (contexts/user/application/get-user-query-service.ts の\n" +
+          "GetUserQueryOutput と、その実装 infrastructure/get-user-query-service-live.ts)。\n" +
+          "値オブジェクト (domain/model/value-objects/) とドメインサービス\n" +
+          "(domain/services/) は許可しています。前者は語彙、後者は認可などの判定で、\n" +
+          "どちらも集約の復元にはあたりません。",
+      }),
+      from: {
+        path: "^src/contexts/[^/]+/(application|public)/.*-query(-service)?\\.ts$",
+      },
+      to: {
+        path: [
+          // 集約本体 (domain/model/ 直下)。value-objects/ は 1 階層下なので当たらない。
+          "^src/contexts/[^/]+/domain/model/[^/]+\\.ts$",
+          // 書き込みポート。
+          "^src/contexts/[^/]+/domain/[^/]+-repository\\.ts$",
+        ],
+      },
+    },
+
     // ---- 共有基盤の向き ----
     {
       name: "shared-not-to-contexts",
