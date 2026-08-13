@@ -1230,6 +1230,11 @@ Hono 既定の平文 `Internal Server Error` が返る。契約と違う形に�
 
 ### 一覧について
 
-フラットにしても将来の `listUsers` は困らない。一覧は
+フラットにしても一覧は困らない。一覧は
 `{ items: [...], totalCount, currentPage }` のような**それ自体が意味を持つオブジェクト**に
-なるので、封筒とは別物（`schema/src/shared/pagination/` の型がそのため）。
+なるので、封筒とは別物。
+
+> かつてこの段落は「将来の `listUsers` のために `schema/src/shared/pagination/` に
+> 型を用意してある」と続いていた。**`listUsers` ごと実装しないと決めたので型は消した**
+> （[`API契約/ページネーションを実装するか.md`](API契約/ページネーションを実装するか.md)）。
+> 封筒を使わない判断そのものは変わらない。
