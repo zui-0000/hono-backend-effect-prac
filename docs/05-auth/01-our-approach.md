@@ -3,9 +3,10 @@
 方式そのものの解説は [`00-authentication-methods.md`](00-authentication-methods.md) にある。
 ここは**このリポジトリが何を選び、何をまだ決めていないか**だけを書く。
 
-> **状態**（2026-08-09）: login / refresh / logout の 3 本すべてが動作。
+> **状態**（2026-08-14）: login / refresh / logout の 3 本すべてが動作。
 > Bearer の検証も入り、契約が `@useAuth` を宣言している 5 本が実際に閉じた。
-> 残る未決は Cookie への移行だけで、それはフロントの構成が決まるまで動かせない。
+> **未決だった Cookie への移行も完了**（[下記](#リフレッシュトークンは-httponly-cookie2026-08-14-に決定)）。
+> 残るのは CORS だけで、それはフロントを繋ぐ移植先で入れる。
 
 ---
 
@@ -13,11 +14,11 @@
 
 `schema/src/contexts/auth/` を読むと、**3 つの軸のうち 2 つは決着している**。
 
-| 軸             | 答え                                | 契約のどこに書いてあるか                                    |
-| -------------- | ----------------------------------- | ----------------------------------------------------------- |
-| ① 状態を持つか | **券ごとに違う**（下記）            | `AccessToken` / `RefreshToken` の doc                       |
-| ② どう運ぶか   | **ボディと `Authorization` ヘッダ** | `LoginResponse` / `RefreshRequest` / `@useAuth(BearerAuth)` |
-| ③ 券は何枚か   | **2 枚（アクセス + リフレッシュ）** | `LoginResponse` が両方を返す                                |
+| 軸             | 答え                                | 契約のどこに書いてあるか                             |
+| -------------- | ----------------------------------- | ---------------------------------------------------- |
+| ① 状態を持つか | **券ごとに違う**（下記）            | `AccessToken` / `RefreshToken` の doc                |
+| ② どう運ぶか   | **券ごとに違う**（下記）            | `LoginResponse` / `@cookie` / `@useAuth(BearerAuth)` |
+| ③ 券は何枚か   | **2 枚（アクセス + リフレッシュ）** | `LoginResponse` + `Set-Cookie`                       |
 
 ### アクセストークンは JWT
 
@@ -49,16 +50,20 @@
 **「失効させる」と書いた時点で、リフレッシュトークンは保存が必要**になる。
 JWT では失効させられないので、この 1 文が方式を決めている。
 
-### 券はボディで受け渡す
+### 券の運び方は 2 つに分かれる（2026-08-14 に変更）
 
 ```tsp
-model LoginResponse {  accessToken: AccessToken;  refreshToken: RefreshToken; }
-model RefreshRequest { refreshToken: RefreshToken; }
+model LoginResponse { accessToken: AccessToken; }        // 本文はアクセストークンだけ
+op refresh(..., @cookie refreshToken: RefreshToken)      // 券は Cookie で受け取る
 ```
 
-`Set-Cookie` ではなく **JSON のボディ**で返し、更新時もボディで送り返す。
-つまり**クライアントの JS が両方の券を保持する**前提。保護対象の操作は
-`@useAuth(BearerAuth)` なので `Authorization: Bearer <token>` で送る。
+**アクセストークンは本文、リフレッシュトークンは HttpOnly Cookie。**
+保護対象の操作は `@useAuth(BearerAuth)` なので `Authorization: Bearer <token>` で送る。
+
+> かつては**両方をボディ**で受け渡していた（`LoginResponse` が 2 枚とも返し、
+> `RefreshRequest` がボディで送り返す）。つまりクライアントの JS が
+> 2 週間有効な券を保持する前提で、**XSS を踏んだ瞬間に盗まれる**形だった。
+> 変更の経緯は[下記](#リフレッシュトークンは-httponly-cookie2026-08-14-に決定)。
 
 ---
 
@@ -69,7 +74,8 @@ model RefreshRequest { refreshToken: RefreshToken; }
 ```text
 アクセストークン    JWT・短命           → 署名検証だけ。DB を引かない
 リフレッシュトークン ランダム文字列・長命 → DB に記録。失効できる。更新時に差し替える
-運び方              ボディ + Authorization ヘッダ（Cookie は使わない）
+運び方              アクセス: 本文 + Authorization ヘッダ
+                    リフレッシュ: HttpOnly Cookie（JS からは読めない）
 ```
 
 [`00-authentication-methods.md`](00-authentication-methods.md#構成の一覧) で言う
@@ -518,26 +524,123 @@ handleWithEffect({
 極端に遅いネットワーク、リトライの重なり）。全セッションを切ると、誤検出のときに
 正規利用者が全端末から締め出される。まず狭く切り、必要になったら広げる。
 
-## まだ決めていないこと
+## リフレッシュトークンは HttpOnly Cookie（2026-08-14 に決定）
 
-| 論点                | 選択肢                                                    | 決める引き金                     |
-| ------------------- | --------------------------------------------------------- | -------------------------------- |
-| **Cookie への移行** | 現契約はボディ + Bearer。SSR を前に置くなら Cookie が要る | **フロントの構成が決まったとき** |
+長らく「まだ決めていないこと」の唯一の項目だった。**引き金は「フロントの構成が
+決まったとき」**と書いてあり、それが引かれた——別リポジトリ
+（`aws-infra-practice` の `full-stack-ts-aws-ecs`）で React SPA +
+サブドメイン分離の構成が固まったため。判断の全文は向こうの
+`docs/初期構想/02-認証方式.md` にある。ここには**この repo に入れた結果**を書く。
 
-### Cookie への移行について
+### 判断軸は SSR ではなく XSS だった
 
-現在の契約は **SPA 前提**。`localStorage` や JS のメモリに券を持ち、
-ヘッダに載せて送る形になる。
+ここには「SSR を前に置くなら Cookie が要る」と書いてあった。その軸だと
+React SPA なら「Bearer のままでよい」になる。**その軸が不十分だった。**
 
-将来 SSR（tanstack-start 等）を前に置くなら話が変わる。
-**SSR サーバは `localStorage` を読めない**ので、初回描画で認証付きのデータを取れない
-（詳細は [`00-authentication-methods.md`](00-authentication-methods.md#ssr-がある場合は選択肢が狭まる)）。
+```text
+旧: refreshToken (2 週間) をクライアントの JS が保持する
+    → XSS を踏んだ瞬間、2 週間有効な券が盗まれる
+```
 
-移行するなら `LoginResponse` からトークンを外して `Set-Cookie` に変え、
-`RefreshRequest` のボディも空にすることになる。**`schema/` が変わりクライアントが壊れる**ので、
-[`../../CLAUDE.md`](../../CLAUDE.md) の基準どおり破壊的変更マーカー `!` が付く。
+この doc 自身が「契約がボディで受け渡す形なので**置き場が盗まれやすく**、
+『盗まれたと気付ける』価値が相対的に高い」と書いてローテーションを採用していた。
+**その前提条件のほうを潰した**、というのが今回の変更。
 
-**この判断はバックエンド単体では決められない。** フロントの構成が固まってから決める。
+### 採った形
+
+```text
+アクセストークン (15 分)      → 本文。JS のメモリに置く（localStorage には置かない）
+リフレッシュトークン (2 週間) → HttpOnly Cookie
+    HttpOnly; Secure; SameSite=Lax; Path=/auth/refresh; Max-Age=1209600
+```
+
+`Path=/auth/refresh` に絞るのが要点。**更新以外のエンドポイントには一切飛ばない**ので
+漏洩面が最小になる。
+
+**得るものだけではない。心配ごとが 1 つ消えて 1 つ増える。**
+
+|                  | 得る                                 | 失う                            |
+| ---------------- | ------------------------------------ | ------------------------------- |
+| Bearer 一本      | CSRF を考えなくてよい                | XSS で 2 週間の券が盗まれる     |
+| **ハイブリッド** | XSS で盗まれるのは最大 15 分の券だけ | **CSRF という考慮事項が増える** |
+
+`SameSite=Lax` と CORS の Origin 制限でほぼ塞がる。**「XSS のほうが CSRF より怖い」
+という重み付けを採った**、というのが判断の実体。
+
+### 契約の変更（破壊的）
+
+```text
+LoginResponse    refreshToken を外す（accessToken だけ）
+RefreshResponse  refreshToken を外す（accessToken だけ）
+RefreshRequest   モデルごと削除（ボディが空になる）
+refresh          @cookie refreshToken: RefreshToken を受ける
+login/refresh    Set-Cookie を返す（AuthResponses.tsp）
+logout           Set-Cookie で消す（同上）
+```
+
+`schema/` が変わりクライアントが壊れるので、
+[`../../CLAUDE.md`](../../CLAUDE.md) の基準どおり `!` が付く。
+
+### `@useAuth` ではなく `@cookie` にした
+
+向こうの doc は `@useAuth(ApiKeyAuth<ApiKeyLocation.cookie, "refresh_token">)` を
+指定していたが、**`@cookie` に変えた**。理由は向こうの doc が挙げた目的
+（契約に現れないと二重管理になる）に、こちらのほうが近いから。
+
+|                             | OpenAPI に出るもの                               |
+| --------------------------- | ------------------------------------------------ |
+| `@useAuth(ApiKeyAuth<...>)` | securityScheme。「資格情報がある」としか言えない |
+| **`@cookie`**               | **`in: cookie` のパラメータ。値の型まで出る**    |
+
+> **ただし二重管理は消えなかった。** orval は Cookie パラメータのスキーマを
+> **生成しない**（ヘッダとパスパラメータは生成するのに、Cookie だけ落ちる。実測済み）。
+> そのため検証スキーマは
+> [`refresh-cookie.ts`](../../src/contexts/auth/presentation/refresh-cookie.ts) に
+> 手書きが残り、長さの制約（20〜2048）を契約と二重に持っている。
+> **消せる引き金は orval が Cookie パラメータを生成するようになること。**
+
+### 応答側は `@cookie` が使えない
+
+`@typespec/http` 1.14.0 は**応答の `@cookie` に未対応**。書くと
+`response-cookie-not-supported` の警告が出たうえ、**そのプロパティは黙って本文から落ちる**。
+コンパイラ自身が「`Set-Cookie` が要るなら `@header` を使え」と案内するので、
+応答側は `@header("Set-Cookie")` で宣言している。**入口と出口で書き方が非対称**になる。
+
+### 実装に入れたもの
+
+`handleWithEffect` の設計がそのまま効いた。**入力源を 1 つ足すだけ**で済んでいる。
+
+```text
+validateJson / validateHeader / validateParams / validateQuery
+  + validateCookie      ← 追加（getCookie(c) を decodeInput に通すだけ）
+```
+
+出力側は**ステータス × 本文の有無**の 2 軸に、**Cookie という 3 つ目の軸**が増えた。
+Cookie はステータスと直交する（ログインは 200 + Cookie、ユーザー取得は 200 のみ、
+ログアウトは 204 + Cookie）ため、任意フィールドとして足してある。
+**「204 に本文」が書けない**という元の性質は保たれている。
+
+属性を書いてよいのは
+[`refresh-cookie.ts`](../../src/contexts/auth/presentation/refresh-cookie.ts) の 1 箇所だけ。
+発行と削除が**同じ関数を通る**ので、`Path` や `Domain` がズレようがない
+（1 つでも違うとブラウザは別の Cookie とみなし、**消したつもりで残る**）。
+
+環境で変わる `Secure` と `Domain` だけ `CookieSettings`（`shared/domain/` のポート）から
+読む。**既定は `Secure` を付ける**——設定を忘れた環境が安全側に倒れるように。
+
+### ログアウトは Cookie も消す
+
+向こうの doc に無かった点。**サーバ側でセッションを失効させるだけでは足りない。**
+消さなければブラウザは 2 週間送り続ける。実害は「必ず 401 になる券が飛ぶ」程度だが、
+失効済みの券が届き続けると**盗難検出のログがノイズで埋まる**
+（`revoked_reason = revoked` の券は再利用検出の対象でもある）。
+
+### 残っていること
+
+**CORS はこの repo に入れていない。** フロントが無いので検証する相手がおらず、
+向こうの doc 自身が「CORS と Cookie の実地検証は `dev1` が初出」と認めている。
+移植先で `origin` と `credentials: true` を入れる（`credentials: true` と
+`Access-Control-Allow-Origin: *` は**仕様上併用できない**）。
 
 ---
 

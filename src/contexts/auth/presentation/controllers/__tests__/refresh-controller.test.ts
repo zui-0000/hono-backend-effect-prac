@@ -4,12 +4,16 @@ import { Effect, Option, Schema } from "effect";
 
 import { makeRuntime } from "~/__mocks__/app-runtime";
 import {
+  cookieValueOf,
   FAKE_ACCESS_TOKEN,
+  headers,
   FAKE_REFRESH_TOKEN,
   FAKE_TOKEN_HASH,
   FIXED_UUID,
-  headers,
   OTHER_UUID,
+  REFRESH_COOKIE_NAME,
+  setCookieOf,
+  withRefreshCookie,
 } from "~/__mocks__/data";
 import { createApp } from "~/app";
 import type { AppRuntime } from "~/app-runtime";
@@ -18,7 +22,6 @@ import {
   RevokedReason,
 } from "~/contexts/auth/domain/model/refresh-token";
 import type { RefreshTokenHash } from "~/contexts/auth/domain/model/value-objects/refresh-token-hash";
-import type { RefreshBody } from "~/generated/auth";
 import { ErrorCode } from "~/shared/presentation/constants/error-code";
 import { ErrorMessage } from "~/shared/presentation/constants/error-message";
 import { HttpStatus } from "~/shared/presentation/constants/http-status";
@@ -30,16 +33,19 @@ const NEXT_REFRESH_TOKEN = "rt_next-refresh-token-after-rotation-0123456789";
 const NEXT_TOKEN_HASH =
   "1111111111111111111111111111111111111111111111111111111111111111";
 
+/**
+ * 券は **Cookie で送る**。ボディは空。
+ *
+ * 実際の利用ではブラウザが自動で付けるので、クライアントの JS は
+ * `credentials: 'include'` を指定する以外に何もしない。
+ */
 const refresh = async (
   runtime: AppRuntime,
-  requestBody: typeof RefreshBody.Encoded = {
-    refreshToken: FAKE_REFRESH_TOKEN,
-  },
+  refreshToken: string = FAKE_REFRESH_TOKEN,
 ): Promise<Response> =>
   await createApp(runtime).request("/auth/refresh", {
     method: "POST",
-    headers,
-    body: JSON.stringify(requestBody),
+    headers: withRefreshCookie(refreshToken),
   });
 
 /**
@@ -121,12 +127,24 @@ describe(refreshController.name, () => {
       const response = await refresh(runtime);
 
       expect(response.status).toBe(HttpStatus.Ok);
+      // **本文に券は載らない。** 載せると JS から読めてしまい、Cookie へ移した
+      // 意味が消える。ここが緩むと XSS で 2 週間の券が盗まれる形に戻る。
       expect(await response.json()).toStrictEqual({
         accessToken: FAKE_ACCESS_TOKEN,
-        // 返るのは**差し替え後**の券。提示した券をそのまま返すと、
-        // クライアントは失効済みの券を持ち続けることになる。
-        refreshToken: NEXT_REFRESH_TOKEN,
       });
+
+      // 返るのは**差し替え後**の券。提示した券をそのまま返すと、
+      // クライアントは失効済みの券を持ち続けることになる。
+      expect(cookieValueOf(response)).toBe(NEXT_REFRESH_TOKEN);
+
+      const setCookie = setCookieOf(response) ?? "";
+      // JS から読めないこと。Cookie へ移した理由そのもの。
+      expect(setCookie).toContain("HttpOnly");
+      // 送る経路を絞ること。全リクエストに 2 週間の券が乗るのを防ぐ。
+      expect(setCookie).toContain("Path=/auth/refresh");
+      expect(setCookie).toContain("SameSite=Lax");
+      // 2 週間。DB の expires_at と揃える (片方だけずれると挙動が割れる)。
+      expect(setCookie).toContain(`Max-Age=${14 * 24 * 60 * 60}`);
 
       expect(rotated).toHaveLength(1);
       // 失効させるのは**いま提示された券そのもの**。
@@ -159,8 +177,8 @@ describe(refreshController.name, () => {
       expect(response.status).toBe(HttpStatus.Ok);
       expect(await response.json()).toStrictEqual({
         accessToken: FAKE_ACCESS_TOKEN,
-        refreshToken: NEXT_REFRESH_TOKEN,
       });
+      expect(cookieValueOf(response)).toBe(NEXT_REFRESH_TOKEN);
       expect(rotated).toHaveLength(1);
     });
   });
@@ -255,14 +273,27 @@ describe(refreshController.name, () => {
       // 不透明トークンなので中身は検証できない。契約が見るのは長さだけ。
       const runtime = makeRuntime();
 
-      const response = await refresh(runtime, { refreshToken: "short" });
+      const response = await refresh(runtime, "short");
 
       expect(response.status).toBe(HttpStatus.BadRequest);
       expect(await response.json()).toStrictEqual({
         errorCode: ErrorCode.BadRequest,
         message: ErrorMessage.BadRequest,
-        details: [{ field: "refreshToken", message: expect.any(String) }],
+        // フィールド名は Cookie の名前そのもの (ボディの項目名ではない)。
+        details: [{ field: REFRESH_COOKIE_NAME, message: expect.any(String) }],
       });
+    });
+
+    test("Cookie が無い場合、400 を返すこと", async () => {
+      // 「券が無い」は形式の話なので 400。401 にすると、認証の失敗
+      // (券はあるが通らない) と区別がつかなくなる。
+      const response = await createApp(makeRuntime()).request("/auth/refresh", {
+        method: "POST",
+        headers,
+      });
+
+      expect(response.status).toBe(HttpStatus.BadRequest);
+      expect(setCookieOf(response)).toBeNull();
     });
   });
 });

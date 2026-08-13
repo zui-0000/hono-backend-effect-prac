@@ -1,5 +1,6 @@
 import { Effect, type ManagedRuntime } from "effect";
 import type { Handler } from "hono";
+import { setCookie } from "hono/cookie";
 
 import type { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
 import type { UuidGenerator } from "~/shared/domain/uuid-generator";
@@ -78,6 +79,15 @@ const handle =
           ...authenticated,
           c,
         } as ControllerInput<Req, Auth>);
+
+        // Set-Cookie は本文の有無に関わらず積む。204 にも載る (ログアウトが
+        // 券の Cookie を消すため)。**応答を作る前**に呼ぶ必要がある —
+        // c.json / c.body は組み立て済みの Response を返すので、
+        // その後にヘッダを足しても反映されない。
+        if (responded.cookie !== undefined) {
+          const { name, value, options } = responded.cookie;
+          setCookie(c, name, value, options);
+        }
 
         // 204 は本文を持てないので c.json を通さない。通すと本文が空でも
         // Content-Type: application/json が載り、中身があると名乗る応答になる。

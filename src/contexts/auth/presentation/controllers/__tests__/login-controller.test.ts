@@ -5,7 +5,9 @@ import { Effect, Option, Schema } from "effect";
 import { makeRuntime } from "~/__mocks__/app-runtime";
 import {
   FAKE_ACCESS_TOKEN,
+  cookieValueOf,
   FAKE_REFRESH_TOKEN,
+  setCookieOf,
   FAKE_TOKEN_HASH,
   FIXED_UUID,
   headers,
@@ -76,10 +78,18 @@ describe(loginController.name, () => {
       const response = await login(runtime, requestBody);
 
       expect(response.status).toBe(HttpStatus.Ok);
+      // **本文にはアクセストークンだけ。** リフレッシュトークンを載せると
+      // JS から読めてしまい、XSS を踏んだ瞬間に 2 週間有効な券が漏れる。
       expect(await response.json()).toStrictEqual({
         accessToken: FAKE_ACCESS_TOKEN,
-        refreshToken: FAKE_REFRESH_TOKEN,
       });
+
+      // 券は HttpOnly Cookie で渡す。
+      expect(cookieValueOf(response)).toBe(FAKE_REFRESH_TOKEN);
+      const setCookie = setCookieOf(response) ?? "";
+      expect(setCookie).toContain("HttpOnly");
+      expect(setCookie).toContain("Path=/auth/refresh");
+      expect(setCookie).toContain("SameSite=Lax");
 
       // **集約を丸ごと突き合わせる。** 平文の券が紛れ込んでいないことを
       // 「特定の項目だけ見る」形で確かめると、項目が増えたときに漏れる。

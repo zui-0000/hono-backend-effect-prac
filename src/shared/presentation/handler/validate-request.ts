@@ -1,5 +1,6 @@
 import { Effect, type Schema } from "effect";
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 
 import { BadRequestError } from "~/shared/errors/bad-request-error";
 
@@ -18,6 +19,7 @@ import type { AuthenticatedInput } from "./verify-bearer";
  *   validateHeader … ヘッダ           `c.req.header()`
  *   validateParams … パスパラメータ   `c.req.param()`   例: /users/:id の :id
  *   validateQuery  … クエリパラメータ `c.req.query()`   例: /users?page=2
+ *   validateCookie … Cookie           `getCookie(c)`    例: refresh_token
  *
  * いずれも外へは出さない。**controller から呼ぶのは `decodeInput` だけ**で、
  * こちらを呼ぶと同じ検証を二度走らせることになる。
@@ -80,6 +82,22 @@ const validateQuery = <A, I>(
 ): Effect.Effect<A, BadRequestError> => decodeInput(schema)(c.req.query());
 
 /**
+ * Cookie を API 契約スキーマで検証する (リフレッシュトークンの受け取り)。
+ *
+ * `getCookie(c)` は全 Cookie を `{ 名前: 値 }` で返す。**名前は契約が決めたもの
+ * そのまま**なので、ヘッダのような大文字小文字の正規化は要らない
+ * (Cookie 名は大文字小文字を区別する)。
+ *
+ * 送られていない Cookie はキーごと現れないため、必須なら decode が落ちて 400 になる。
+ * 「券が無い」を 401 にしないのは、**形式の話と認証の話を混ぜない**ため
+ * (ヘッダやボディが欠けたときと同じ扱い。券が「有るが通らない」場合だけが 401)。
+ */
+const validateCookie = <A, I>(
+  c: Context,
+  schema: Schema.Schema<A, I>,
+): Effect.Effect<A, BadRequestError> => decodeInput(schema)(getCookie(c));
+
+/**
  * リクエストのどの入力源を契約で検証するかの宣言。**値はすべてスキーマ。**
  *
  * header は必須。全エンドポイントが相関 ID (X-Request-Id) を要求するため。
@@ -95,6 +113,7 @@ export type RequestSchemas = {
   readonly body?: Schema.Schema.AnyNoContext;
   readonly params?: Schema.Schema.AnyNoContext;
   readonly query?: Schema.Schema.AnyNoContext;
+  readonly cookie?: Schema.Schema.AnyNoContext;
 };
 
 /**
@@ -144,6 +163,9 @@ export const validateRequest = <Req extends RequestSchemas>(
     }
     if (request.query !== undefined) {
       validated["query"] = yield* validateQuery(c, request.query);
+    }
+    if (request.cookie !== undefined) {
+      validated["cookie"] = yield* validateCookie(c, request.cookie);
     }
 
     return validated as ValidatedRequest<Req>;

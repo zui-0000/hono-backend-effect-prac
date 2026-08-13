@@ -94,28 +94,34 @@ namespace BackendApi {
     @route("/login")
     @operationId("login")
     op login(...CommonHeaders, @body body: LoginRequest):
-      | SuccessOkResponse<LoginResponse>
+      | LoginSuccessResponse
       | BadRequestErrorResponse
       | UnauthorizedErrorResponse
       | InternalServerErrorResponse;
 
-    /** ログアウト (要認証。リフレッシュトークンを失効させる) */
+    /** ログアウト (要認証。リフレッシュトークンを失効させ、Cookie も消す) */
     @post
     @route("/logout")
     @useAuth(BearerAuth)
     @operationId("logout")
     op logout(...CommonHeaders):
-      | SuccessNoContentResponse
+      | LogoutSuccessResponse
       | BadRequestErrorResponse
       | UnauthorizedErrorResponse
       | InternalServerErrorResponse;
 
-    /** アクセストークンを再発行する (リフレッシュトークンを使用。認証不要) */
+    // 券の受け取りに @useAuth(ApiKeyAuth<ApiKeyLocation.cookie, ...>) ではなく
+    // @cookie を使っている。前者は securityScheme にしかならず「資格情報がある」
+    // としか言えないが、@cookie なら in: cookie のパラメータとして
+    // **値の型 (RefreshToken) まで契約に出る**。
+    // ただし orval は Cookie パラメータのスキーマを生成しない (実測済み) ので、
+    // 検証用のスキーマは実装側の手書きが残る。経緯は docs/05-auth/01-our-approach.md。
+    /** アクセストークンを再発行する (券は HttpOnly Cookie で受け取る。認証不要) */
     @post
     @route("/refresh")
     @operationId("refresh")
-    op refresh(...CommonHeaders, @body body: RefreshRequest):
-      | SuccessOkResponse<RefreshResponse>
+    op refresh(...CommonHeaders, @cookie refreshToken: RefreshToken):
+      | RefreshSuccessResponse
       | BadRequestErrorResponse
       | UnauthorizedErrorResponse
       | InternalServerErrorResponse;

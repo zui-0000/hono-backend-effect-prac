@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect";
+import type { CookieOptions } from "hono/utils/cookie";
 
 import { HttpStatus } from "./constants/http-status";
 
@@ -34,8 +35,36 @@ type NoBodyStatus = typeof HttpStatus.NoContent;
  * この形なら「204 に本文」も「200 に本文なし」も型として書けない。
  */
 export type SuccessResponse =
-  | { readonly status: NoBodyStatus }
-  | { readonly status: BodyStatus; readonly body: unknown };
+  | ({ readonly status: NoBodyStatus } & WithCookie)
+  | ({ readonly status: BodyStatus; readonly body: unknown } & WithCookie);
+
+/**
+ * 応答に載せる Cookie。**値と属性だけ**で、Hono の `Context` には触れない
+ * (実際に `Set-Cookie` を積むのは `handleWithEffect` の仕事)。
+ *
+ * 属性を controller 側で組み立てるのは、**属性が経路ごとに違う**から。
+ * `Path` は `/auth/refresh` に絞り、ログアウトでは `maxAge: 0` で消す。
+ * とはいえ controller が個々の属性を手で書くわけではなく、所有コンテキストが
+ * 用意した 1 箇所を呼ぶ (auth なら
+ * [`refresh-cookie.ts`](../../contexts/auth/presentation/refresh-cookie.ts))。
+ */
+export type ResponseCookie = {
+  readonly name: string;
+  readonly value: string;
+  readonly options: CookieOptions;
+};
+
+/**
+ * Cookie を載せられる、という性質。**ステータスとは直交する。**
+ *
+ * 本文の有無はステータスが決まれば決まる (下記) が、Cookie はそうではない。
+ * ログインは 200 + Cookie、ユーザー取得は 200 + Cookie 無し、
+ * ログアウトは 204 + Cookie。**3 つ目の軸**として足すしかない。
+ *
+ * 任意にしてあるので、**「204 に本文」が書けない**という元の性質は保たれる。
+ * 増えたのは独立した軸が 1 本だけ。
+ */
+type WithCookie = { readonly cookie?: ResponseCookie };
 
 /**
  * 本文のある応答にする。
@@ -81,6 +110,25 @@ const withoutBody =
     effect: Effect.Effect<unknown, E, R>,
   ): Effect.Effect<SuccessResponse, E, R> =>
     effect.pipe(Effect.as({ status }));
+
+/**
+ * 組み立て済みの応答に Cookie を載せる。**pipe の最後に足す形**。
+ *
+ * `SuccessResponse` の表に混ぜないのは、あれが**ステータスの表**だから。
+ * Cookie はステータスと直交するので、並べると軸が 2 つ混ざって読めなくなる。
+ *
+ * ```ts
+ * command(input)
+ *   .pipe(SuccessResponse.Ok(Login200Response))
+ *   .pipe(withResponseCookie(cookie))
+ * ```
+ */
+export const withResponseCookie =
+  (cookie: ResponseCookie) =>
+  <E, R>(
+    effect: Effect.Effect<SuccessResponse, E, R>,
+  ): Effect.Effect<SuccessResponse, E, R> =>
+    effect.pipe(Effect.map((response) => ({ ...response, cookie })));
 
 /**
  * 成功応答の作り方。**pipe に載る形**にしてある。

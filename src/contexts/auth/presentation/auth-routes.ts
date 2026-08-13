@@ -4,7 +4,6 @@ import {
   LoginBody,
   LoginHeader,
   LogoutHeader,
-  RefreshBody,
   RefreshHeader,
 } from "~/generated/auth";
 import { handleWithEffect } from "~/shared/presentation/handle-with-effect";
@@ -14,6 +13,7 @@ import type { AuthRuntime } from "../auth-runtime";
 import { loginController } from "./controllers/login-controller";
 import { logoutController } from "./controllers/logout-controller";
 import { refreshController } from "./controllers/refresh-controller";
+import { RefreshCookie } from "./refresh-cookie";
 
 /**
  * auth コンテキストの HTTP 経路。パスは TypeSpec の @route と対応する
@@ -36,7 +36,8 @@ export const authRoutes = (runtime: AuthRuntime): Hono<RequestIdEnv> => {
   routes.post(
     "/refresh",
     handleWithEffect({
-      request: { header: RefreshHeader, body: RefreshBody },
+      // 券は本文ではなく Cookie で受け取る。契約の `@cookie refreshToken` と 1 対 1。
+      request: { header: RefreshHeader, cookie: RefreshCookie },
       controller: refreshController,
     })(runtime),
   );

@@ -26,7 +26,8 @@ src/
 │     └─ presentation/  #     <ctx>-routes.ts（HTTP 契約の宣言）+ controllers/
 ├─ shared/
 │  ├─ domain/           # 共有カーネル。model/ が語彙（uuid.ts + value-objects/）、
-│  │                    #   直下はドメインが環境から得るもの（時刻 / 採番 / ハッシュ化）
+│  │                    #   直下は環境から得るもののポート（時刻 / 採番 / ハッシュ化 /
+│  │                    #   券の発行 / Cookie の設定）。Live が Config を読む
 │  ├─ application/      # ユースケースの共通部品（orNotFound）。層で切った並びの一員
 │  ├─ errors/           # 型付きエラー（Data.TaggedError）
 │  ├─ presentation/     # 直下は公開面（入口 3 つ + 語彙）、handler/ が部品
@@ -480,6 +481,29 @@ controller 側では近くで読める。失うのは一覧性だけ。
 
 なお**ステータスの取り違えは型では防げない**（`Ok` を `Created` に書き換えても
 通る）。これは移行前も同じで、退化ではない。
+
+#### 3 つ目の軸: Set-Cookie（2026-08-14 に追加）
+
+`SuccessResponse` は「**ステータス × 本文の有無**」の 2 軸で、判別子はステータスそのもの
+（本文を持てるかはステータスが決まれば決まる）。ここに Cookie を足した。
+
+**Cookie はステータスと直交する。** ログインは 200 + Cookie、ユーザー取得は 200 のみ、
+ログアウトは 204 + Cookie。だから任意フィールドとして横に足すしかない。
+
+```ts
+type WithCookie = { readonly cookie?: ResponseCookie };
+export type SuccessResponse =
+  | ({ readonly status: NoBodyStatus } & WithCookie)
+  | ({ readonly status: BodyStatus; readonly body: unknown } & WithCookie);
+```
+
+**元の性質は保たれている** —「204 に本文」も「200 に本文なし」も書けないまま。
+増えたのは独立した軸が 1 本だけで、判別子がステータスであることも変わらない。
+
+属性（`HttpOnly` / `Path` など）は controller が手で書かず、所有コンテキストが
+用意した 1 箇所を呼ぶ（auth なら `refresh-cookie.ts`）。散らすと**属性が 1 つ違うだけで
+別の Cookie 扱いになり、消したつもりで残る**。経緯は
+[`05-auth/01-our-approach.md`](05-auth/01-our-approach.md#リフレッシュトークンは-httponly-cookie2026-08-14-に決定)。
 
 #### 応答スキーマの検証は「再検証」ではない
 

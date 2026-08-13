@@ -15,7 +15,13 @@ paths:
         - $ref: '#/components/parameters/CommonHeaders'
       responses:
         '200':
-          description: 成功
+          description: ログイン成功。リフレッシュトークンは HttpOnly Cookie で返す
+          headers:
+            Set-Cookie:
+              required: true
+              description: refresh_token を設定する Set-Cookie。HttpOnly のため JS からは読めない
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -49,12 +55,18 @@ paths:
   /auth/logout:
     post:
       operationId: logout
-      description: ログアウト (要認証。リフレッシュトークンを失効させる)
+      description: ログアウト (要認証。リフレッシュトークンを失効させ、Cookie も消す)
       parameters:
         - $ref: '#/components/parameters/CommonHeaders'
       responses:
         '204':
-          description: 成功
+          description: ログアウト成功。Cookie を空の値で上書きして消す
+          headers:
+            Set-Cookie:
+              required: true
+              description: refresh_token を空値・Max-Age=0 で上書きして消す Set-Cookie
+              schema:
+                type: string
         '400':
           description: リクエスト内容が不正 (汎用)
           content:
@@ -80,12 +92,24 @@ paths:
   /auth/refresh:
     post:
       operationId: refresh
-      description: アクセストークンを再発行する (リフレッシュトークンを使用。認証不要)
+      description: アクセストークンを再発行する (券は HttpOnly Cookie で受け取る。認証不要)
       parameters:
         - $ref: '#/components/parameters/CommonHeaders'
+        - name: refresh_token
+          in: cookie
+          required: true
+          schema:
+            $ref: '#/components/schemas/RefreshToken'
+          explode: false
       responses:
         '200':
-          description: 成功
+          description: 更新成功。ローテーションした券を Cookie で差し替える
+          headers:
+            Set-Cookie:
+              required: true
+              description: refresh_token を新しい券で上書きする Set-Cookie
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -110,12 +134,6 @@ paths:
                 $ref: '#/components/schemas/InternalServerError'
       tags:
         - Auth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RefreshRequest'
   /users:
     post:
       operationId: createUser
@@ -522,12 +540,9 @@ components:
       type: object
       required:
         - accessToken
-        - refreshToken
       properties:
         accessToken:
           $ref: '#/components/schemas/AccessToken'
-        refreshToken:
-          $ref: '#/components/schemas/RefreshToken'
       title: LoginResponse
     MailAddress:
       type: string
@@ -561,24 +576,13 @@ components:
       title: Password
       examples:
         - '************'
-    RefreshRequest:
-      type: object
-      required:
-        - refreshToken
-      properties:
-        refreshToken:
-          $ref: '#/components/schemas/RefreshToken'
-      title: RefreshRequest
     RefreshResponse:
       type: object
       required:
         - accessToken
-        - refreshToken
       properties:
         accessToken:
           $ref: '#/components/schemas/AccessToken'
-        refreshToken:
-          $ref: '#/components/schemas/RefreshToken'
       title: RefreshResponse
     RefreshToken:
       type: string

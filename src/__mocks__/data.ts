@@ -58,6 +58,31 @@ export const headers = {
   [HttpHeader.Authorization]: `Bearer ${FAKE_ACCESS_TOKEN}`,
 };
 
+/**
+ * リフレッシュトークンを載せる Cookie の名前。
+ *
+ * **実装の定数を import しない。** あちらは契約の `@cookie refreshToken` が出す名前と
+ * 一致していることが要件で、テストが同じ値を独立に持つことで
+ * 「名前を変えたら鳴る」状態を作る (import すると一緒に変わって気付けない)。
+ */
+export const REFRESH_COOKIE_NAME = "refresh_token";
+
+/** 券を Cookie に載せたリクエストヘッダ。refresh はこれで券を送る。 */
+export const withRefreshCookie = (
+  refreshToken: string,
+): Record<string, string> => ({
+  ...headers,
+  Cookie: `${REFRESH_COOKIE_NAME}=${refreshToken}`,
+});
+
+/** 応答の Set-Cookie をそのまま取り出す (無ければ null)。 */
+export const setCookieOf = (response: Response): string | null =>
+  response.headers.get("set-cookie");
+
+/** Set-Cookie に載っている値だけを取り出す (属性は見ない)。 */
+export const cookieValueOf = (response: Response): string | undefined =>
+  setCookieOf(response)?.split(";")[0]?.replace(`${REFRESH_COOKIE_NAME}=`, "");
+
 /** 既に永続化されている User 集約。作成/更新日時は 0 に固定して差分を見やすくする。 */
 export const makeUser = (
   params: { readonly id?: string; readonly mailAddress?: string } = {},

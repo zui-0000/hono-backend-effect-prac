@@ -7,6 +7,7 @@ import { GetUserQueryService } from "~/contexts/user/application/get-user-query-
 import { UserRepository } from "~/contexts/user/domain/user-repository";
 import { VerifyCredentialsQueryService } from "~/contexts/user/public/verify-credentials-query-service";
 import { AccessTokenIssuer } from "~/shared/domain/access-token-issuer";
+import { CookieSettings } from "~/shared/domain/cookie-settings";
 import { PasswordHasher } from "~/shared/domain/password-hasher";
 import { UuidGenerator } from "~/shared/domain/uuid-generator";
 
@@ -89,6 +90,9 @@ export const makeRuntime = (
         execute: () => Effect.succeed(Option.none()),
         ...overrides.verifyCredentialsQueryService,
       }),
+      // テストは http:// で叩くので Secure を外す。属性の値そのものを見る
+      // ケースがあるため、本番の既定 (secure: true) ではなくここで固定する。
+      Layer.succeed(CookieSettings, { secure: false, domain: undefined }),
       Layer.succeed(UuidGenerator, { next: Effect.succeed(FIXED_UUID) }),
     ),
   );
